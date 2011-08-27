@@ -1,0 +1,8 @@
+enum sys_code {
+	STATUS_OK = 0,
+	INIT_ERROR,
+	NOT_INIT_READY,
+	INVALID_PARAM,
+	NO_SPACE_ERROR,
+	FINI_ERROR,
+};
