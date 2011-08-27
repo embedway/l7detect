@@ -41,7 +41,7 @@ extern log_t *syslog_p;
 #define if_error_return(statement, rv)\
 	do{																	\
 		if (!(statement)) {												\
-			log_error(syslog_p, "%s not satisfied\n", #statement);		\
+			log_error(syslog_p, "%s:%d:statement %s failed\n", __FILE__, __LINE__, #statement); \
 			return rv;													\
 		}																\
 	}while(0)

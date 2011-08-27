@@ -6,10 +6,12 @@
 #include "conf.h"
 #include "log.h"
 #include "module_manage.h"
-#include "recv.h"
+#include "tag_manage.h"
+#include "modules.h"
 #include "process.h"
 
 #define MAX_MODULE_NUM  20
+#define MAX_TAG_NUM  40
 
 static void (*original_sig_int)(int num);
 static void (*original_sig_term)(int num);
@@ -50,18 +52,58 @@ static int32_t __sys_fini()
     return STATUS_OK;
 }
 
-static module_hd_t *__module_init()
+static tag_hd_t* __tag_init()
 {
-    module_hd_t *module_hd;
+	tag_hd_t *tag_hd;
+	tag_hd = tag_init(MAX_TAG_NUM);
+	tag_register(tag_hd, "start");
+	tag_register(tag_hd, "decap");
+	tag_register(tag_hd, "gtp");
+	tag_register(tag_hd, "gre");
+	tag_register(tag_hd, "l2tp");
+	tag_register(tag_hd, "ipv4_frag");
+	tag_register(tag_hd, "ipv6_frag");
+	tag_register(tag_hd, "tcp");
+	tag_register(tag_hd, "udp");
 	
-	module_hd = module_list_create(MAX_MODULE_NUM);
-	assert(module_hd);
-	module_list_add(module_hd, "recv", &recv_mod_ops);
+	assert(tag_hd);
+	return tag_hd;
+}
 
-	assert(module_list_init(module_hd) == 0);
-	assert(module_list_start(module_hd) == 0);
+static void __tag_fini(tag_hd_t **tag_hd_pp)
+{
+	tag_fini(tag_hd_pp);
+}
+
+static module_hd_t* __module_init()
+{
+	module_hd_t *module_hd_p;
+	module_hd_p = module_list_create(MAX_MODULE_NUM);
+	assert(module_hd_p);
+	module_list_add(module_hd_p, "recv", &recv_mod_ops);
+	module_list_add(module_hd_p, "decap", &decap_mod_ops);
+	module_list_add(module_hd_p, "tunnel", NULL);
+	module_list_add(module_hd_p, "reassemble", NULL);
+	module_list_add(module_hd_p, "flow", NULL);
+	module_list_add(module_hd_p, "action", NULL);
 	
-	return module_hd;
+	module_tag_bind(module_hd_p, pktag_hd_p, "recv", "start");
+	module_tag_bind(module_hd_p, pktag_hd_p, "decap", "decap");
+
+	module_tag_bind(module_hd_p, pktag_hd_p, "tunnel", "gtp");
+	module_tag_bind(module_hd_p, pktag_hd_p, "tunnel", "gre");
+	module_tag_bind(module_hd_p, pktag_hd_p, "tunnel", "l2tp");
+	
+	module_tag_bind(module_hd_p, pktag_hd_p, "reassemble", "ipv4_frag");
+	module_tag_bind(module_hd_p, pktag_hd_p, "reassemble", "ipv6_frag");
+
+	module_tag_bind(module_hd_p, pktag_hd_p, "flow", "tcp");
+	module_tag_bind(module_hd_p, pktag_hd_p, "flow", "udp");
+	
+	assert(module_list_init(module_hd_p) == 0);
+	assert(module_list_start(module_hd_p) == 0);
+	
+	return module_hd_p;
 }
 
 static int32_t __module_fini(module_hd_t **module_hd_pp)
@@ -69,7 +111,7 @@ static int32_t __module_fini(module_hd_t **module_hd_pp)
 	int status;
     status = module_manage_fini(module_hd_pp);
     if_error_return(status == STATUS_OK, status);
-
+	
     return STATUS_OK;
 }
 
@@ -77,6 +119,7 @@ int main(int argc, char *argv[])
 {
 	int32_t status;
 	module_hd_t *module_hd_p;
+
 /*获取配置*/
 	parse_args(argc, argv);
 	if (read_conf() != 0) {
@@ -87,25 +130,26 @@ int main(int argc, char *argv[])
 
 	log_notice(syslog_p, "sys init OK!\n");
 	
+	pktag_hd_p  = __tag_init();
+	assert(pktag_hd_p);
+	log_notice(syslog_p, "tag init OK!\n");
+	
 	module_hd_p = __module_init();
-	if (module_hd_p == NULL) {
-		log_error(syslog_p, "Some module init error\n");
-		goto end;
-	}
-	
+	assert(module_hd_p);
 	log_notice(syslog_p, "module init OK!\n");
-	
+
 /*开始处理*/
-	
 	process_loop(module_hd_p);
 
 /*处理结束*/
-end:
 	if (__module_fini(&module_hd_p) != 0) {
 		log_error(syslog_p, "Some module finish error...\n");
 	} else {
 		log_notice(syslog_p, "module safe exit...\n");
 	}
+	
+	__tag_fini(&pktag_hd_p);
+	log_notice(syslog_p, "tag safe exit...\n");
 
 	if ((status = __sys_fini()) != 0) {
 		print("sys fin status %d\n", status);

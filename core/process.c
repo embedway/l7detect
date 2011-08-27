@@ -2,7 +2,14 @@
 #include "recv.h"
 #include "log.h"
 
-void process_loop(module_hd_t *head_p)
+tag_hd_t *pktag_hd_p;
+
+void process_loop(module_hd_t *module_head)
 {
-	module_list_process(head_p);
+	int32_t status;
+
+	do {
+		status = module_list_process(module_head, pktag_hd_p);
+	} while (status >= 0);
+	
 }

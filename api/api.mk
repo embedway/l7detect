@@ -8,6 +8,7 @@ LIBRARY := $(OBJ_DIR)/libapi.a
 
 API_OBJS = $(OBJ_DIR)/log.o
 API_OBJS += $(OBJ_DIR)/module_manage.o
+API_OBJS += $(OBJ_DIR)/tag_manage.o
 API_OBJS += $(OBJ_DIR)/zone.o
 
 OBJS_$(d)  :=  $(API_OBJS)

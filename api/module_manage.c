@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <time.h>
+#include <assert.h>
 
 #include "common.h"
 #include "module_manage.h"
@@ -13,36 +14,47 @@ module_hd_t *module_list_create(int max_module_num)
 {
 	module_hd_t *head_p;
 	head_p = malloc(sizeof(module_hd_t));
-	if_error_return(head_p != NULL, NULL);
+	assert(head_p);
 	memset(head_p, 0, sizeof(module_hd_t));
 
 	head_p->module_max = max_module_num + 1;
 	head_p->module_valid = 0;
 	head_p->module_info = malloc(sizeof(module_info_t) * (max_module_num+1));
-	if (head_p->module_info == NULL) {
-		free(head_p);
-		return NULL;
-	}
+	assert(head_p->module_info);
 	return head_p;
 }
+
 int32_t module_list_add(module_hd_t *head_p, char *name, module_ops_t *ops)
 {
 	int i = 0;
 	module_info_t *modules;
 	
-	if_error_return(head_p != NULL, -NOT_INIT_READY);
+	assert(head_p);
+	assert(head_p->module_info);
+	assert(name);
+	assert(head_p->module_valid + 1 < head_p->module_max);
 
 	modules= head_p->module_info;
-	if_error_return(modules != NULL, -NOT_INIT_READY);
-	if_error_return(name != NULL, -INVALID_PARAM);
-	if_error_return(head_p->module_valid + 1 < head_p->module_max, -NO_SPACE_ERROR);
-	
 	i = head_p->module_valid + 1;
 	modules[i].name = name;
-	//modules[i].id = id;
 	modules[i].ops = ops;
 	head_p->module_valid++;
 	return STATUS_OK;
+}
+
+void module_tag_bind(module_hd_t *module_head, tag_hd_t *tag_head, char *module_name, char *tag_name)
+{
+	int tag_index, module_index;
+	tag_info_t *tag_info;
+
+	module_index = module_id_get_from_name(module_head, module_name);
+	assert(module_index);
+
+	tag_index = tag_id_get_from_name(tag_head, tag_name);
+	assert(tag_index);
+	
+	tag_info = tag_head->tag_info;
+	tag_info[tag_index].module_id = module_index;
 }
 
 int32_t module_list_init(module_hd_t *head_p)
@@ -51,15 +63,14 @@ int32_t module_list_init(module_hd_t *head_p)
 	int status;
 	module_info_t *modules;
 	
-	if_error_return(head_p != NULL, -NOT_INIT_READY);
-
+	assert(head_p);
+	assert(head_p->module_info);
 	modules	= head_p->module_info;	
-	if_error_return(modules != NULL, -NOT_INIT_READY);
 	
 	for (i=1; i<(int)head_p->module_valid + 1; i++) {
 		if ((modules[i].ops != NULL) && (modules[i].ops->init != NULL)) {
 			status = modules[i].ops->init(&modules[i]);
-			if_error_return(status == 0, status);
+			assert(status == 0);
 		}
 	}
 	return STATUS_OK;
@@ -71,68 +82,111 @@ int32_t module_list_start(module_hd_t *head_p)
 	int status;
 	module_info_t *modules;
 
-	if_error_return(head_p != NULL, -NOT_INIT_READY);
+	assert(head_p);
+	assert(head_p->module_info);
 
 	modules = head_p->module_info;
-	if_error_return(modules != NULL, -NOT_INIT_READY);
 
 	for (i=1; i<(int)head_p->module_valid + 1; i++) {
 		if ((modules[i].ops != NULL) && (modules[i].ops->start != NULL)) {
 			status = modules[i].ops->start(&modules[i]);
-			if_error_return(status == 0, status);
+			assert(status == 0);
 		}
 	}
 	return STATUS_OK;
 }
 
-int32_t module_list_process(module_hd_t *head_p)
+int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p)
 {
-	int32_t last, current, next;
+	int32_t last, current, tagid;
 	module_info_t *modules, *current_mod, *last_mod;
 	module_ops_t *current_ops, *last_ops;
 	void *data;
+	uint16_t i;
+	uint64_t module_hit_mask = 0;
 	
-	if_error_return(head_p != NULL, -NOT_INIT_READY);
-	modules = head_p->module_info;
-	if_error_return(modules != NULL, -NOT_INIT_READY);
+	assert(head_p);
+	assert(head_p->module_info);
 
-	last = current = next = 1;
+	modules = head_p->module_info;
+
+	last = 0;
+	current = tagid = 1;
 	data = NULL;
+	
 	do {
 		current_mod = &modules[current];
 		current_ops = current_mod->ops;
 		last_mod = &modules[last];
 		last_ops = last_mod->ops;
 		if ((current_ops != NULL) && (current_ops->process != NULL)) {
-			data = last_ops->result_get(last_mod);
-			next = current_ops->process(&modules[current], data);
-			if_error_return(next >= 0, next);
-			last_ops->result_free(last_mod);
+			if (last_ops && last_ops->result_get != NULL) {
+				data = last_ops->result_get(last_mod);
+			} else {
+				data = NULL;
+			}
+			tagid = current_ops->process(&modules[current], data);
+			module_hit_mask |= 1<<current;
+			if (tagid < 0) {
+				return tagid;
+			}
 			last = current;
-			current = next;
+			current = module_id_get_from_tag_id(tag_p, tagid);
 		} else {
 			break;
 		}
-	} while ((next > 0) && ((uint32_t)next < head_p->module_valid + 1));
+	} while ((current > 0) && ((uint32_t)current <= head_p->module_valid));
+
+	for (i=1; i<= head_p->module_valid; i++) {
+		if (module_hit_mask & (1<<i)) {
+			if (modules[i].ops->result_free) {
+				modules[i].ops->result_free(&modules[i]);
+			}
+		}
+	}
+
 	return STATUS_OK;
 }
 
 module_info_t *module_info_get_from_name(module_hd_t *head_p, char *name)
 {
-	int i;
+	uint16_t i;
 	module_info_t *modules;
 
-	if_error_return(head_p != NULL, NULL);
+	assert(head_p);
+	assert(head_p->module_info);
+	modules = head_p->module_info;
 
-	modules =  head_p->module_info;
-	if_error_return(modules != NULL, NULL);
-
-	for (i=1; i<(int)head_p->module_valid + 1; i++) {
+	for (i=1; i<=head_p->module_valid; i++) {
 		if (strcmp(modules[i].name, name) == 0) {
-				return &modules[i];
+			break;
 		}
 	}
+	if (i <= head_p->module_valid) {
+		return &modules[i];
+	} 
 	return NULL;
+}
+
+uint16_t module_id_get_from_name(module_hd_t *head_p, char *name)
+{
+	uint16_t i;
+	module_info_t *modules;
+
+	assert(head_p);
+	assert(head_p->module_info);
+	modules =  head_p->module_info;
+
+	for (i=1; i<=head_p->module_valid; i++) {
+		if (strcmp(modules[i].name, name) == 0) {
+			break;
+		}
+	}
+	if (i <= head_p->module_valid) {
+		return i;
+	} else {
+		return 0;
+	}
 }
 
 void module_list_show(module_hd_t *head_p)
@@ -179,7 +233,7 @@ int32_t module_list_fini(module_hd_t *head_p)
 			}
 		}
 	}
-	return 0;
+	return STATUS_OK;
 }
 
 int32_t module_manage_fini(module_hd_t **head_pp)
@@ -197,5 +251,5 @@ int32_t module_manage_fini(module_hd_t **head_pp)
 		free(head_p);
 		*head_pp = NULL;
 	}
-	return 0;
+	return STATUS_OK;
 }

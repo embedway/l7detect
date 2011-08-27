@@ -4,6 +4,8 @@
 #include "common.h"
 #include "module_manage.h"
 
-void process_loop(module_hd_t *module_hd);
+extern tag_hd_t *pktag_hd_p;
+
+void process_loop(module_hd_t *module_head);
 
 #endif

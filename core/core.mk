@@ -10,6 +10,7 @@ API_OBJS = $(OBJ_DIR)/main.o
 API_OBJS += $(OBJ_DIR)/conf.o
 API_OBJS += $(OBJ_DIR)/pcap_read.o
 API_OBJS += $(OBJ_DIR)/recv.o
+API_OBJS += $(OBJ_DIR)/decap.o
 API_OBJS += $(OBJ_DIR)/process.o
 
 OBJS_$(d)  :=  $(API_OBJS)

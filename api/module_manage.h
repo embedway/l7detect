@@ -1,7 +1,9 @@
-#ifndef __PROBE_H__
-#define __PROBE_H__
+#ifndef __MODULE_MANAGE_H__
+#define __MODULE_MANAGE_H__
+
 #include <stdio.h>
 #include <stdint.h>
+#include "tag_manage.h"
 
 #define MODULE_QUIT 0x10
 
@@ -66,11 +68,17 @@ int32_t module_list_init(module_hd_t *head);
  * 
  * @return 0，成功；其他值，失败原因；
  */
-
 int32_t module_list_start(module_hd_t *head);
 
-
-int32_t module_list_process(module_hd_t *head_p);
+/** 
+ * 模块处理函数，该函数会按照函数返回的tag调用对应的模块处理函数，直到成功处理完所有模块，返回0；或者失败返回错误原因
+ * 
+ * @param head_p 模块头指针
+ * @param tag_p tag头指针 
+ *
+ * @return 0，成功；< 0，失败原因；
+ */
+int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p);
 /** 
  * 根据模块名称，获取模块信息
  * 
@@ -81,6 +89,26 @@ int32_t module_list_process(module_hd_t *head_p);
  */
 module_info_t *module_info_get_from_name(module_hd_t *head, char *name);
 
+
+/** 
+ * 根据模块名称，返回模块对应的id
+ * 
+ * @param head 模块的头指针
+ * @param name 模块名称
+ * 
+ * @return >0，表示模块id；0，表示失败；
+ */
+uint16_t module_id_get_from_name(module_hd_t *head, char *name);
+
+/** 
+ * module和tag绑定函数
+ * 
+ * @param module_head module头指针
+ * @param tag_head tag头指针
+ * @param module_name 要绑定的module名称
+ * @param tag_name 要绑定的tag名称
+ */
+void module_tag_bind(module_hd_t *module_head, tag_hd_t *tag_head, char *module_name, char *tag_name);
 /** 
  * 根据模块id，获取模块信息
  * 
@@ -90,7 +118,6 @@ module_info_t *module_info_get_from_name(module_hd_t *head, char *name);
  * @return 非NULL值，表示模块信息；NULL，表示失败；
  */
 module_info_t *module_info_get_from_id(module_hd_t *head, uint16_t id);
-
 
 /** 
  * 模块列表显示函数

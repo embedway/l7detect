@@ -5,4 +5,5 @@ enum sys_code {
 	INVALID_PARAM,
 	NO_SPACE_ERROR,
 	FINI_ERROR,
+	ITEM_NOT_FOUND,
 };
