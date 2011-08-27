@@ -7,7 +7,7 @@
 #include "mem.h"
 #include "module_manage.h"
 #include "conf.h"
-#include "recv.h"
+#include "parser.h"
 #include "log.h"
 #include "process.h"
 
@@ -107,6 +107,7 @@ static int32_t pcap_read_process(module_info_t *this, void *data)
 	}
 	memcpy(packet->data, ptr, packet->len);
 	p->stats.good_pkts++;
+	packet->pktag = tag;
 	return tag;
 }
 

@@ -1,8 +1,7 @@
-#ifndef __RECV_H__
-#define __RECV_H__
+#ifndef __PARSER_H__
+#define __PARSER_H__
 
 #include "common.h"
-#include "module_manage.h"
 
 #define MAX_PACKET_LEN 1518
 #define MAX_PARSER_DEPTH 10
@@ -11,7 +10,7 @@ typedef struct packet {
 	void *top_packet;
     void *next_packet;
 	uint64_t flag;/*包标识*/
-	uint64_t state;/*包状态，用于区分进入同样模块处理，但tag不一样的状态*/
+	uint64_t pktag;
 	uint8_t prot_types[MAX_PARSER_DEPTH];
     uint8_t prot_offsets[MAX_PARSER_DEPTH];
     uint8_t prot_depth;
@@ -171,5 +170,6 @@ typedef struct {
 	uint16_t src_port;
 	uint16_t dst_port;
 } dpi_l4_hdr_t;
+
 
 #endif

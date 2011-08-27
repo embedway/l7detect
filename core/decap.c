@@ -10,7 +10,7 @@
 #include "mem.h"
 #include "module_manage.h"
 #include "conf.h"
-#include "recv.h"
+#include "parser.h"
 #include "log.h"
 #include "process.h"
 #include "decap.h"
@@ -210,8 +210,8 @@ do_decap_ipv4:
 	ipv4 = (dpi_ipv4_hdr_t *)ptr;
 	if ((htons(ipv4->offset) & IP_FRAGMASK) != 0) {
         stats->ipv4_frag_pkts++;
-		packet->state = IPV4_FRAGMENT;
 		tag = ipv4_frag_tag;
+		packet->pktag = tag;
 		return tag;
     }
 
@@ -242,12 +242,13 @@ do_decap_tcp:
 	packet->app_offset = ptr - start_ptr;
 	if (packet->app_offset <= packet->len){
 		stats->tcp_pkts++;
-		packet->state = L4_TCP;
 		tag = tcp_tag;
+		packet->pktag = tag;
 		return tag;
     } else {
 		__pkts_cap(info, MALFORMED_PKTS);
 		stats->malformed_pkts++;
+		packet->pktag = 0;
 		return 0;
 	}
 do_decap_udp:
@@ -256,28 +257,33 @@ do_decap_udp:
 	packet->app_offset = ptr - start_ptr;
 	if (packet->app_offset <= packet->len){
 		stats->udp_pkts++;
-		packet->state = L4_UDP;
 		tag = udp_tag;
+		packet->pktag = tag;
         return tag;
     } else {
 		__pkts_cap(info, MALFORMED_PKTS);
 		stats->malformed_pkts++;
+		packet->pktag = 0;
 		return 0;
 	}
 	
 do_decap_icmp:
 	//__pkts_cap(info, DPI_PROT_ICMP);
+	packet->pktag = 0;
 	stats->icmp_pkts++;
 	return 0;
 do_decap_ipv6:
 	//__pkts_cap(info, DPI_PROT_IPV6);
+	packet->pktag = 0;			
 	stats->ipv6_pkts++;
 	return 0;
 do_decap_unhandle:
 	//__pkts_cap(info, UNHANDLE_PKTS);
+	packet->pktag = 0;
 	return 0;
 unknown_pkts:
 	__pkts_cap(info, UNKNOWN_PKTS);
+	packet->pktag = 0;
 	stats->unknown_pkts++;
 	return 0;
 }
