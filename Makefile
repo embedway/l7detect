@@ -51,6 +51,6 @@ clean:
 	rm -f $(CLEAN_LIST)
 
 clobber: clean
-	rm -rf $(OBJ_DIR)
+	rm -rf $(OBJ_DIR) $(DYNLIB_DIR)
 
 
