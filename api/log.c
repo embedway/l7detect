@@ -45,11 +45,32 @@ int32_t log_log(log_t *log_p, uint32_t level, const char * fmt, ...)
 		p += n;
 		
 		n = vsnprintf(p, end-p, fmt, ap);
-		n = write(log_p->fd, buffer, strlen(head) + n);
+		n = write(log_p->fd, buffer, strlen(head) + n - 1);
 		va_end(ap);
 	} 
 	return n;
 }
+
+int32_t log_print(log_t *log_p, const char * fmt, ...)
+{
+	char buffer[1024];
+	va_list ap;
+	char *p, *end;
+	int n = 0;
+	
+	assert(log_p != NULL);
+
+	p = buffer;
+	end = buffer + sizeof(buffer);
+	va_start(ap, fmt);
+	
+	n = vsnprintf(p, end-p, fmt, ap);
+	n = write(log_p->fd, buffer, n);
+	va_end(ap);
+	return n;
+}
+
+
 
 int32_t log_fini(log_t **log_pp)
 {

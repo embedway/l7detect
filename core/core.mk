@@ -12,6 +12,7 @@ API_OBJS += $(OBJ_DIR)/pcap_read.o
 API_OBJS += $(OBJ_DIR)/recv.o
 API_OBJS += $(OBJ_DIR)/decap.o
 API_OBJS += $(OBJ_DIR)/process.o
+API_OBJS += $(OBJ_DIR)/flow_frm.o
 
 OBJS_$(d)  :=  $(API_OBJS)
 

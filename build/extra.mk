@@ -71,11 +71,11 @@ RUNTIME_FLAG += -DOS_WINDOWS
 endif
 
 OBJ_DIR = $(TOP)/build/obj$(PREFIX)
+DYNLIB_DIR = $(TOP)/.libs
 
 CFLAGS_GLOBAL += $(RUNTIME_FLAG)
 #  standard compile line
 
 COMPILE = $(CC) $(CFLAGS_GLOBAL) $(CFLAGS_LOCAL) -MD -c -o $@ $<
-
 ASSEMBLE = $(CC) $(ASFLAGS_GLOBAL) $(ASFLAGS_LOCAL) -MD -c -o $@ $<
 

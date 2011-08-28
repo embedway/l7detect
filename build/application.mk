@@ -1,6 +1,7 @@
 $(OBJ_DIR):
 	mkdir $(OBJ_DIR)
-
+$(DYNLIB_DIR):
+	mkdir $@
 #  applications object suffix rule
 
 $(OBJ_DIR)/%.o: %.c
@@ -58,10 +59,11 @@ archive: $(ARCHIVE_FILES)
 		chmod -R a+r ${CVMX_ARCHIVE_DIRECTORY}/${OCTEON_MODEL} ; \
 	 fi ; \
 
-application-target: $(TARGET) $(EXTRA_CVMX_APPLICATION_TARGETS) archive
+application-target: $(TARGET) $(EXTRA_CVMX_APPLICATION_TARGETS) archive $(DYNLIB)
 
 #$(TARGET).stp: $(TARGET)
 #	$(STRIP) -o $(TARGET).stp $(TARGET)
 
 $(TARGET): $(CVMX_CONFIG) $(OBJ_DIR) $(OBJS) $(LIBS_LIST)
 	$(CC) $(OBJS) $(LDFLAGS_PATH) $(LIBS_LIST) $(LDFLAGS_GLOBAL) -o $@
+

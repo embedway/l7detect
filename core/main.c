@@ -84,7 +84,7 @@ static module_hd_t* __module_init()
 	module_list_add(module_hd_p, "decap", &decap_mod_ops);
 	module_list_add(module_hd_p, "tunnel", NULL);
 	module_list_add(module_hd_p, "reassemble", NULL);
-	module_list_add(module_hd_p, "flow", NULL);
+	module_list_add(module_hd_p, "flow", &flow_frm_ops);
 	module_list_add(module_hd_p, "action", NULL);
 	
 	module_tag_bind(module_hd_p, pktag_hd_p, "recv", "start");

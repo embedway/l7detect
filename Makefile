@@ -4,7 +4,7 @@ LDFLAGS_GLOBAL=
 
 #.PHONY: head_links clean back update version tags cstags 
 #  standard common Makefile fragment
-all: application-target
+all: all_targets
 
 include $(TOP)/build/extra.mk
 
@@ -25,27 +25,26 @@ include $(dir)/lib.mk
 dir:=$(TOP)/api
 include $(dir)/api.mk
 
+dir:=$(TOP)/plugin
+include $(dir)/plugin.mk
+
 TARGET = l7detect$(PREFIX) 
 
-LIBS_LIST := $(LIBS_LIST) $($(TARGET)-LIBS) -lpthread -lpcap
+LIBS_LIST := $(LIBS_LIST) $($(TARGET)-LIBS) 
 
 CFLAGS_LOCAL = -g -O2 -W -Wall -Wno-unused-parameter  
 CFLAGS_LOCAL += $($(TARGET)-FLAGS)
 
 CFLAGS_GLOBAL += -I$(TOP)/include 
-
+LDFLAGS_GLOBAL += -lpthread -lpcap -ldl
 include $(TOP)/build/application.mk
 
 CLEAN_LIST += $(OBJS)
 CLEAN_LIST += $(OBJS:.o=.d)
 CLEAN_LIST += $(GEN_C_FILES)
 
-
-#all_targets:
-#	$(MAKE) TARGET=$$t application-target || exit -1;done
-
-$(GEN_C_FILES):$(GEN_SOURCE_FILES)
-	$(PROTOC_BIN) comm_share.proto --c_out=$(PWD) && mv $(GEN_H_FILES) $(TOP)/include
+all_targets:$(DYNLIB_DIR)
+	for t in $(DYN_LIBS_LIST); do $(MAKE) DYNLIB=$$t application-target|| exit -1;done	
 
 clean:
 	rm -f $(TARGET) 

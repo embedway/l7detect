@@ -66,7 +66,7 @@ module_ops_t pcap_read_ops = {
 	return 0;
 }
 
-static inline void packet_init(packet_t *packet)
+static inline void __packet_init(packet_t *packet)
 {
 	memset(packet, 0, sizeof(packet_t));
 	packet->prot_types[0] = 1;
@@ -99,7 +99,7 @@ static int32_t pcap_read_process(module_info_t *this, void *data)
 
 	p->packet = packet;
 
-	packet_init(packet);
+	__packet_init(packet);
 	packet->len = hdr.caplen;
 	if (packet->len >= MAX_PACKET_LEN) {
 		p->stats.oversize_pkts++;

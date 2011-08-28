@@ -23,6 +23,8 @@ log_t* log_init(char *logfile, uint32_t level);
 
 int32_t log_log(log_t *log_p, uint32_t level, const char * fmt, ...);
 
+int32_t log_print(log_t *log_p, const char * fmt, ...);
+
 int32_t log_fini(log_t **log_pp);
 
 extern log_t *syslog_p;
@@ -35,6 +37,7 @@ extern log_t *syslog_p;
 #define log_notice(log, fmt, args...) log_log(log, NOTICE, fmt, ##args)
 #define log_info(log, fmt, args...) log_log(log, INFO, fmt, ##args)
 #define log_debug(log, fmt, args...) log_log(log, DEBUG, fmt, ##args)
+
 #define print printf
 
 

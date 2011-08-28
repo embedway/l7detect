@@ -14,6 +14,7 @@
 #include "log.h"
 #include "process.h"
 #include "decap.h"
+#include "helper.h"
 
 #define PKTS_MAX_NUM 10
 #define PKTS_MAX_LEN MAX_PACKET_LEN
@@ -79,16 +80,11 @@ static inline void __pkts_cap(decap_info_t *info, uint32_t code)
 
 static inline void __pkts_dump(decap_info_t *info)
 {
-	int i, j;
+	int i;
 	for (i=0; i<info->cap_num; i++) {
-		print("--------------------code:%d-------------------\n", info->cap_pkts[i].code);
-		for (j=0; j<(int)info->cap_pkts[i].pkts_len; j++) {
-			print("%02x ", info->cap_pkts[i].pkts_cap[j]);
-			if ((j+1) % 16 == 0) {
-				print("\n");
-			} 
-		}
-		printf("\n");
+		log_print(syslog_p, "--------------------code:%d-------------------\n", info->cap_pkts[i].code);
+		list_format_print_buffer(info->cap_pkts[i].pkts_cap, 8, info->cap_pkts[i].pkts_len, FORMAT_PRINT_WITH_HEAD);
+		log_print(syslog_p, "\n");
 	}
 
 }
