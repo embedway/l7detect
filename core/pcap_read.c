@@ -21,10 +21,10 @@ typedef struct pcap_stats {
 } pcap_stats_t;
 
 typedef struct pcap_read {
+	packet_t *packet;
 	pcap_t *pcap;
 	zone_t *zone;
 	pcap_stats_t stats;
-	packet_t *packet;
 } pcap_read_t;
 
 static int32_t pcap_read_init(module_info_t *this);
@@ -105,6 +105,8 @@ static int32_t pcap_read_process(module_info_t *this, void *data)
 		p->stats.oversize_pkts++;
 		packet->len = MAX_PACKET_LEN;
 	}
+
+	packet->data = (void *)packet + sizeof(packet_t);
 	memcpy(packet->data, ptr, packet->len);
 	p->stats.good_pkts++;
 	packet->pktag = tag;
@@ -148,6 +150,7 @@ static int pcap_read_fini(module_info_t *this)
 	pcap_close(p->pcap);
 	p->pcap = NULL;
 	p->packet = NULL;
+	free(p);
 	log_notice(syslog_p, "    pcap_read module finish OK\n");
 	return 0;
 }

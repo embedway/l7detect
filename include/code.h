@@ -7,3 +7,8 @@ enum sys_code {
 	FINI_ERROR,
 	ITEM_NOT_FOUND,
 };
+
+
+enum process_code {
+	UNKOWN_PKT = 100, 
+};

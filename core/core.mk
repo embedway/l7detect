@@ -12,11 +12,11 @@ API_OBJS += $(OBJ_DIR)/pcap_read.o
 API_OBJS += $(OBJ_DIR)/recv.o
 API_OBJS += $(OBJ_DIR)/decap.o
 API_OBJS += $(OBJ_DIR)/process.o
-API_OBJS += $(OBJ_DIR)/flow_frm.o
+API_OBJS += $(OBJ_DIR)/session_frm.o
 
 OBJS_$(d)  :=  $(API_OBJS)
 
-API_CFLAGS_LOCAL := -I$(d) -I$(TOP)/api
+API_CFLAGS_LOCAL := -I$(d) -I$(TOP)/api -I$(TOP)/test
 
 $(OBJS_$(d)):  CFLAGS_LOCAL := $(API_CFLAGS_LOCAL)
 

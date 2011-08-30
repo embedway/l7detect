@@ -2,6 +2,7 @@
 #define __LOG_H__
 
 #include "common.h"
+#include "stdio.h"
 
 enum {
 	EMERG,
@@ -39,7 +40,7 @@ extern log_t *syslog_p;
 #define log_debug(log, fmt, args...) log_log(log, DEBUG, fmt, ##args)
 
 #define print printf
-
+#define TRACE print("TRACE:%s:%s, line %d\n", __FILE__,  __FUNCTION__, __LINE__)
 
 #define if_error_return(statement, rv)\
 	do{																	\

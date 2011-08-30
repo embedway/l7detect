@@ -1,6 +1,8 @@
 #ifndef __LIST_H__
 #define __LIST_H__
 
+#include "helper.h"
+
 /*
  * Simple doubly linked list implementation.
  *

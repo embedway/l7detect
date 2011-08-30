@@ -10,14 +10,14 @@ include $(TOP)/build/extra.mk
 
 #  include relevant component Makefile fragments
 
-dir:=$(TOP)/test
-include $(dir)/test.mk
-
 dir:=$(TOP)/cli
 include $(dir)/cli.mk
 
 dir:=$(TOP)/core
 include $(dir)/core.mk
+
+dir:=$(TOP)/test
+include $(dir)/test.mk
 
 dir:=$(TOP)/lib
 include $(dir)/lib.mk

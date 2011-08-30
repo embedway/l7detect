@@ -45,7 +45,6 @@ enum {
 	UNHANDLE_PKTS = 100,
 	UNKNOWN_PKTS,
 	MALFORMED_PKTS,
-	
 } cap_code;
 
 typedef struct decap_info {
@@ -89,13 +88,11 @@ static inline void __pkts_dump(decap_info_t *info)
 
 }
 
-
-
 static int32_t decap_init(module_info_t *this)
 {
 	this->resource = (decap_info_t *)malloc(sizeof(decap_info_t));
 	assert(this->resource);
-	
+
 	memset(this->resource, 0, sizeof(decap_info_t));
 	ipv4_frag_tag = tag_id_get_from_name(pktag_hd_p, "ipv4_frag");
 	tcp_tag = tag_id_get_from_name(pktag_hd_p, "tcp");
@@ -316,8 +313,8 @@ static int decap_fini(module_info_t *this)
 	__pkts_dump(info);
 	
 	log_notice(syslog_p, "\n");
-	if (this->resource) {
-		free(this->resource);
+	if (info) {
+		free(info);
 	}
 	return 0;
 }

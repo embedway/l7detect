@@ -9,7 +9,11 @@
 typedef struct packet {
 	void *top_packet;
     void *next_packet;
-	uint64_t flag;/*包标识*/
+	uint64_t dir:2;
+#define PKT_DIR_UPSTREAM 0x1
+#define PKT_DIR_DNSTREAM 0x2
+#define PKT_DIR_MASK 0x3
+	uint64_t flag:62;/*其他标志*/
 	uint64_t pktag;
 	uint8_t prot_types[MAX_PARSER_DEPTH];
     uint8_t prot_offsets[MAX_PARSER_DEPTH];
@@ -17,7 +21,7 @@ typedef struct packet {
 	uint8_t app_offset;
     uint16_t app_type;
 	uint32_t len;
-	uint8_t data[0];
+	uint8_t *data;
 } packet_t;
 
 typedef struct {

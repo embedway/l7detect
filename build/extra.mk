@@ -1,24 +1,15 @@
-#USER_CONF=runtime.mk
+USER_CONF=$(TOP)/build/runtime.mk
 
-#CPPFLAGS_GLOBAL = -I$(OCTEON_ROOT)/target/include -Iconfig
-#CPPFLAGS_GLOBAL += $(OCTEON_CPPFLAGS_GLOBAL_ADD)
 
 CFLAGS_GLOBAL = $(CPPFLAGS_GLOBAL)
 CFLAGS_GLOBAL += -O2 -g -W -Wall -Wno-unused-parameter -fexceptions  -Werror
-#CFLAGS_GLOBAL += $(OCTEON_CFLAGS_GLOBAL_ADD)
 
 ASFLAGS_GLOBAL = $(CPPFLAGS_GLOBAL) -g
-#ASFLAGS_GLOBAL += $(OCTEON_ASFLAGS_GLOBAL_ADD)
-
-#LDFLAGS_GLOBAL =
-#LDFLAGS_GLOBAL += $(OCTEON_LDFLAGS_GLOBAL_ADD)
-
-#LDFLAGS_PATH = -L$(OCTEON_ROOT)/target/lib
 
 CFLAGS_GLOBAL += $(CFLAGS_COMMON_CONFIG)
 ASFLAGS_GLOBAL += $(CFLAGS_COMMON_CONFIG)
 
-#include $(USER_CONF)
+include $(USER_CONF)
 
 #可以在这里增加对不同编译平台采用不同编译参数以及链接参数
 ifneq ($(findstring OCTEON, $(CHIP)), )
