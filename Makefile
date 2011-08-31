@@ -36,7 +36,7 @@ CFLAGS_LOCAL = -g -O2 -W -Wall -Wno-unused-parameter
 CFLAGS_LOCAL += $($(TARGET)-FLAGS)
 
 CFLAGS_GLOBAL += -I$(TOP)/include 
-LDFLAGS_GLOBAL += -lpthread -lpcap -ldl
+LDFLAGS_GLOBAL += -lpthread -lpcap -ldl -llua -lm
 include $(TOP)/build/application.mk
 
 CLEAN_LIST += $(OBJS)

@@ -66,6 +66,7 @@ static tag_hd_t* __tag_init()
 	tag_register(tag_hd, "ipv6_frag");
 	tag_register(tag_hd, "tcp");
 	tag_register(tag_hd, "udp");
+	tag_register(tag_hd, "sf_plugin");
 	
 	assert(tag_hd);
 	return tag_hd;
@@ -86,6 +87,7 @@ static module_hd_t* __module_init()
 	module_list_add(module_hd_p, "tunnel", NULL);
 	module_list_add(module_hd_p, "reassemble", NULL);
 	module_list_add(module_hd_p, "session", &session_frm_ops);
+	module_list_add(module_hd_p, "sf_plugin", &sf_plugin_ops);
 	module_list_add(module_hd_p, "action", NULL);
 	
 	module_tag_bind(module_hd_p, pktag_hd_p, "recv", "start");
@@ -100,6 +102,8 @@ static module_hd_t* __module_init()
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "tcp");
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "udp");
+
+	module_tag_bind(module_hd_p, pktag_hd_p, "sf_plugin", "sf_plugin");
 	
 	assert(module_list_init(module_hd_p) == 0);
 	assert(module_list_start(module_hd_p) == 0);

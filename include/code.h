@@ -10,5 +10,5 @@ enum sys_code {
 
 
 enum process_code {
-	UNKOWN_PKT = 100, 
+	UNKNOWN_PKT = 100, 
 };

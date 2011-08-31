@@ -15,7 +15,7 @@ typedef struct module_ops {
 	int32_t (*process)(module_info_t *this, void *data);
 	void* (*result_get)(module_info_t *this);
 	void (*result_free)(module_info_t *this);
-	int (*fini)(module_info_t *this);
+	int32_t (*fini)(module_info_t *this);
 } module_ops_t;
 
 struct module_info {

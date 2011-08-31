@@ -13,6 +13,7 @@ API_OBJS += $(OBJ_DIR)/recv.o
 API_OBJS += $(OBJ_DIR)/decap.o
 API_OBJS += $(OBJ_DIR)/process.o
 API_OBJS += $(OBJ_DIR)/session_frm.o
+API_OBJS += $(OBJ_DIR)/sf_plugin.o
 
 OBJS_$(d)  :=  $(API_OBJS)
 

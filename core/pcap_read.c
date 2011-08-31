@@ -43,7 +43,7 @@ module_ops_t pcap_read_ops = {
 	.fini = pcap_read_fini,	
 };
 
- static int32_t pcap_read_init(module_info_t *this)
+static int32_t pcap_read_init(module_info_t *this)
 {
 	pcap_read_t *p;
 	char ebuf[PCAP_ERRBUF_SIZE];

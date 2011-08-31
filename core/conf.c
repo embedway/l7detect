@@ -87,12 +87,20 @@ static inline int32_t __conf_insert(list_head_t *head, char *name, void *data, u
 	return 0;
 }
 
-static inline void* __conf_search(list_head_t *head, char *name)
+static inline void* __conf_search(list_head_t *head, void *pos, char *name)
 {
 	list_head_t *p;
+	int found = 0;
 
 	list_for_each(p, head) {
 		conf_node_t *node = list_entry(p, conf_node_t, list);
+		if ((pos != NULL) && !found) {
+			if (pos == node->data) {
+                /*跳过这个节点，从下一个开始*/
+                found = 1;
+			}
+			continue;
+		}
 		if (strcmp(node->name, name) == 0) {
 			return node->data;
 		}
@@ -100,14 +108,14 @@ static inline void* __conf_search(list_head_t *head, char *name)
 	return NULL;
 }
 
-int32_t conf_insert_module_config(char *name, void *config, uint32_t size)
+int32_t conf_module_config_insert(char *name, void *config, uint32_t size)
 {
 	return __conf_insert(&g_conf.module_conf_head, name, config, size);
 }
 
-void* conf_search_module_config(char *name)
+void* conf_module_config_search(char *name, void *pos)
 {
-	return __conf_search(&g_conf.module_conf_head, name);
+	return __conf_search(&g_conf.module_conf_head, pos, name);
 }
 
 int32_t conf_fini()

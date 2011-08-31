@@ -28,7 +28,7 @@ static int32_t session_frm_process(module_info_t *this, void *data);
 static void* session_frm_result_get(module_info_t *this);
 static void session_frm_result_free(module_info_t *this);
 static int session_frm_fini(module_info_t *this);
-
+static uint16_t sf_plugin_tag;
 module_ops_t session_frm_ops = {					
 	.init = session_frm_init,
 	.start = NULL,
@@ -82,7 +82,7 @@ typedef struct session_frm_info {
 	hash_table_hd_t *session_table;
 	session_conf_t *conf;
 	log_t *log_c;
-	session_item_t *session;	    /**< 流表中找到的表项*/
+	session_item_t *session;	    /**< 流表中找到的表项*/	
 	session_index_t index_cache;	/**< 临时的session cache，减小每次进入函数堆栈分配的开销 */
 	hash_func hash_cb;
 	session_frm_stats_t stats;
@@ -107,7 +107,6 @@ static uint32_t hash_sum(session_index_t *index)
 {
 	return (index->ip[0] + index->ip[1]) + (index->port[0] + index->port[1]);
 }
-
 
 void __update_session_count(session_item_t *session, packet_t *packet)
 {
@@ -179,7 +178,7 @@ static int32_t session_frm_init(module_info_t *this)
 	
 	assert(sizeof(session_item_t) <= 128);
 	assert(info);
-	conf = (session_conf_t *)conf_search_module_config("session");
+	conf = (session_conf_t *)conf_module_config_search("session", NULL);
 	assert(conf);
 	info->session_table = hash_table_init(conf->bucket_num, SPINLOCK);
 	assert(info->session_table);	
@@ -195,7 +194,7 @@ static int32_t session_frm_init(module_info_t *this)
 		}
 	}
 	assert(info->hash_cb);
-
+	sf_plugin_tag = tag_id_get_from_name(pktag_hd_p, "sf_plugin");
 	this->resource = info;
 
 	return 0;
@@ -220,17 +219,26 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	session = info->session;
 	hd = info->session_table;
 	
-	if (session != NULL) {
-		/*goto plugin to handle it*/
+	if (!(packet->prot_types[packet->prot_depth-2] == DPI_PROT_IPV4)) {
+		return -UNKNOWN_PKT;
+	} 
+	switch (packet->prot_types[packet->prot_depth-1]) {
+	case DPI_PROT_TCP:
+	{
+		dpi_tcp_hdr_t* tcp_hdr = (dpi_tcp_hdr_t*)((void *)packet->data + packet->prot_offsets[packet->prot_depth-1]);
+		packet->app_offset = packet->prot_offsets[packet->prot_depth-1] + tcp_hdr->hdr_len;
+		break;
 	}
+	case DPI_PROT_UDP:
+		packet->app_offset = packet->prot_offsets[packet->prot_depth-1] + sizeof(dpi_udp_hdr_t);
+		break;
+	case DPI_PROT_ICMP:
+		packet->app_offset = packet->prot_offsets[packet->prot_depth-1] + sizeof(dpi_icmp_hdr_t);
+		break;
+	default:
+		return -UNKNOWN_PKT;
+	}  
 
-	if (!((packet->prot_types[packet->prot_depth-2] == DPI_PROT_IPV4)  && (
-		  (packet->prot_types[packet->prot_depth-1] == DPI_PROT_TCP)  ||
-		  (packet->prot_types[packet->prot_depth-1] == DPI_PROT_UDP)  ||
-		  (packet->prot_types[packet->prot_depth-1] == DPI_PROT_ICMP)))) {
-		return -UNKOWN_PKT;
-	}
-	
 	iphdr = (dpi_ipv4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-2]);
 	l4hdr = (dpi_l4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-1]);
 	buf->ip[0] = ntohl(iphdr->src_ip);
@@ -278,18 +286,10 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	__update_session_count(session, packet);
 	hash_table_unlock(hd, hash, 0);
-	return 0;
+	return sf_plugin_tag;
 failed:
 	INC_CNT(stats->session_failed);
 	hash_table_unlock(hd, hash, 0);
-	return 0;
-#if 0
-	if (app_classify == 0) {
-		
-	} else {
-		
-	}
-#endif	
 	return 0;
 }
 

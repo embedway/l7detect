@@ -26,4 +26,10 @@ void list_format_print_head(int width);
 void list_format_print_body(void *list, int width, int length, int index, int type);
 void list_format_print_buffer(void *list, int width, int length, int type);
 
+
+#define zmalloc(ptr, type, size) do {			\
+		ptr = (type)(malloc(size));			\
+		memset(ptr, 0, size);					\
+	}while(0)
+
 #endif

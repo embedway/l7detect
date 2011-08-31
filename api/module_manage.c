@@ -131,7 +131,11 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p)
 				return tagid;
 			}
 			last = current;
-			current = module_id_get_from_tag_id(tag_p, tagid);
+			if (tag_p != NULL) {
+				current = module_id_get_from_tag_id(tag_p, tagid);
+			} else {
+				current++;
+			}
 		} else {
 			break;
 		}
@@ -240,9 +244,8 @@ int32_t module_manage_fini(module_hd_t **head_pp)
 {
 	module_info_t *modules;
 	module_hd_t *head_p = *head_pp;
-
-	module_list_fini(head_p);
 	
+	module_list_fini(head_p);
 	if (head_p != NULL) {
 		modules = head_p->module_info;
 		if (modules != NULL) {

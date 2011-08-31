@@ -3,12 +3,13 @@ dirstack_$(sp)  :=  $(d)
 d               :=  $(dir)
 
 #  component specification
-LIBS_NAME := flow_pde.so flow_sde.so
+LIBS_NAME := pde_engine.so 
+#flow_sde.so
 
-flow_pde.so-OBJS := flow_pde.o
-flow_sde.so-OBJS := flow_sde.o
+pde_engine.so-OBJS := pde_engine.o
 flow_pde.so-FLAGS := 
-flow_sde.so-FLAGS := 
+#flow_sde.so-OBJS := flow_sde.o
+#flow_sde.so-FLAGS := 
 
 
 OBJS_NAME := $(foreach obj, $(addsuffix -OBJS,$(LIBS_NAME)), $($(obj)))
@@ -16,7 +17,7 @@ OBJS_NAME := $(foreach obj, $(addsuffix -OBJS,$(LIBS_NAME)), $($(obj)))
 DYNLIBS := $(addprefix $(DYNLIB_DIR)/,$(LIBS_NAME))
 OBJS_$(d)  := $(addprefix $(OBJ_DIR)/,$(OBJS_NAME))
 
-$(OBJS_$(d)):  CFLAGS_LOCAL := -I $(TOP)/include $($(notdir $(DYNLIB))-FLAGS) 
+$(OBJS_$(d)):  CFLAGS_LOCAL := -I$(TOP)/include -I$(TOP)/api -I$(TOP)/core $($(notdir $(DYNLIB))-FLAGS) 
 
 #  standard component Makefile rules
 
@@ -35,7 +36,7 @@ $(OBJ_DIR)/%.o: $(d)/%.c
 	$(COMPILE) 
 
 $(DYNLIB):$(OBJ_DIR)/$($(notdir $(DYNLIB))-OBJS)
-	$(CC) -fPIC -shared -o $@ $^
+	$(CC) -fPIC -shared -o $@ $^ -llua
 
 #  standard component Makefile footer
 d   :=  $(dirstack_$(sp))

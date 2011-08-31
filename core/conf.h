@@ -17,6 +17,11 @@ typedef struct session_conf {
 	char *session_logname;
 } session_conf_t;
 
+typedef struct sf_plugin_conf {
+	char *name;
+}sf_plugin_conf_t;
+
+
 typedef struct conf {
 	int mode;
 	union {
@@ -31,8 +36,8 @@ extern conf_t g_conf;
 
 int32_t conf_init();
 int32_t conf_read(int argc, char *argv[]);
-int32_t conf_insert_module_config(char *name, void *config, uint32_t size);
-void* conf_search_module_config(char *name);
+int32_t conf_module_config_insert(char *name, void *config, uint32_t size);
+void* conf_module_config_search(char *name, void *pos);
 int32_t conf_fini();
 
 #endif
