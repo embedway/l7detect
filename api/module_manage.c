@@ -96,7 +96,7 @@ int32_t module_list_start(module_hd_t *head_p)
 	return STATUS_OK;
 }
 
-int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p)
+int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, void *init_data)
 {
 	int32_t last, current, tagid;
 	module_info_t *modules, *current_mod, *last_mod;
@@ -112,7 +112,11 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p)
 
 	last = 0;
 	current = tagid = 1;
-	data = NULL;
+	if (!init_data) {
+		data = NULL;
+	} else {
+		data = init_data;
+	}
 	
 	do {
 		current_mod = &modules[current];
@@ -122,7 +126,7 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p)
 		if ((current_ops != NULL) && (current_ops->process != NULL)) {
 			if (last_ops && last_ops->result_get != NULL) {
 				data = last_ops->result_get(last_mod);
-			} else {
+			} else if (!init_data){
 				data = NULL;
 			}
 			tagid = current_ops->process(&modules[current], data);

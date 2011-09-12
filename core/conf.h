@@ -19,8 +19,8 @@ typedef struct session_conf {
 
 typedef struct sf_plugin_conf {
 	char *name;
+	char data[1024];
 }sf_plugin_conf_t;
-
 
 typedef struct conf {
 	int mode;

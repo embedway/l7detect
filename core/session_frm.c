@@ -175,9 +175,10 @@ static int32_t session_frm_init(module_info_t *this)
 		{"hash_xor_sum", hash_xor_sum},
 		{"hash_sum", hash_sum},
 	};
-	
+
 	assert(sizeof(session_item_t) <= 128);
 	assert(info);
+
 	conf = (session_conf_t *)conf_module_config_search("session", NULL);
 	assert(conf);
 	info->session_table = hash_table_init(conf->bucket_num, SPINLOCK);
@@ -218,27 +219,16 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	buf = &info->index_cache;
 	session = info->session;
 	hd = info->session_table;
+	info->packet = data;
 	
 	if (!(packet->prot_types[packet->prot_depth-2] == DPI_PROT_IPV4)) {
 		return -UNKNOWN_PKT;
-	} 
-	switch (packet->prot_types[packet->prot_depth-1]) {
-	case DPI_PROT_TCP:
-	{
-		dpi_tcp_hdr_t* tcp_hdr = (dpi_tcp_hdr_t*)((void *)packet->data + packet->prot_offsets[packet->prot_depth-1]);
-		packet->app_offset = packet->prot_offsets[packet->prot_depth-1] + tcp_hdr->hdr_len;
-		break;
+	} else {
+		uint8_t last_prot = packet->prot_types[packet->prot_depth-1];
+		if ((last_prot != DPI_PROT_TCP) && (last_prot != DPI_PROT_UDP) && (last_prot != DPI_PROT_ICMP)) {
+			return -UNKNOWN_PKT;
+		}
 	}
-	case DPI_PROT_UDP:
-		packet->app_offset = packet->prot_offsets[packet->prot_depth-1] + sizeof(dpi_udp_hdr_t);
-		break;
-	case DPI_PROT_ICMP:
-		packet->app_offset = packet->prot_offsets[packet->prot_depth-1] + sizeof(dpi_icmp_hdr_t);
-		break;
-	default:
-		return -UNKNOWN_PKT;
-	}  
-
 	iphdr = (dpi_ipv4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-2]);
 	l4hdr = (dpi_l4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-1]);
 	buf->ip[0] = ntohl(iphdr->src_ip);
@@ -286,7 +276,12 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	__update_session_count(session, packet);
 	hash_table_unlock(hd, hash, 0);
-	return sf_plugin_tag;
+	if (packet->real_applen == 0) {
+		/*app length is 0*/
+		return 0;
+	} else {
+		return sf_plugin_tag;
+	}
 failed:
 	INC_CNT(stats->session_failed);
 	hash_table_unlock(hd, hash, 0);
@@ -295,7 +290,8 @@ failed:
 
 static void* session_frm_result_get(module_info_t *this)
 {
-	return this->resource;
+	session_frm_info *info = this->resource;
+	return info->packet;
 }
 
 static void session_frm_result_free(module_info_t *this)

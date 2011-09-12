@@ -207,9 +207,11 @@ do_decap_ipv4:
 		packet->pktag = tag;
 		return tag;
     }
-
+	
 	ptr += ipv4->hdr_len * 4;
 	ip_protocol = ipv4->protocol;
+	packet->real_applen = ntohs(ipv4->length) - ipv4->hdr_len * 4;
+	
 	switch (ip_protocol) {
 	case DPI_IPPROT_ICMP:
         packet->prot_types[packet->prot_depth] = DPI_PROT_ICMP;
@@ -233,6 +235,7 @@ do_decap_tcp:
 	tcp = (dpi_tcp_hdr_t *)ptr;
     ptr += tcp->hdr_len * 4;
 	packet->app_offset = ptr - start_ptr;
+	packet->real_applen -= tcp->hdr_len * 4;
 	if (packet->app_offset <= packet->len){
 		stats->tcp_pkts++;
 		tag = tcp_tag;
@@ -248,6 +251,7 @@ do_decap_udp:
 	udp = (dpi_udp_hdr_t *)ptr;
     ptr += sizeof(dpi_udp_hdr_t);
 	packet->app_offset = ptr - start_ptr;
+	packet->real_applen -= sizeof(dpi_udp_hdr_t);
 	if (packet->app_offset <= packet->len){
 		stats->udp_pkts++;
 		tag = udp_tag;
@@ -262,6 +266,7 @@ do_decap_udp:
 	
 do_decap_icmp:
 	//__pkts_cap(info, DPI_PROT_ICMP);
+	
 	packet->pktag = 0;
 	stats->icmp_pkts++;
 	return 0;

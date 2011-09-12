@@ -6,11 +6,8 @@ d               :=  $(dir)
 LIBS_NAME := pde_engine.so 
 #flow_sde.so
 
-pde_engine.so-OBJS := pde_engine.o
-flow_pde.so-FLAGS := 
-#flow_sde.so-OBJS := flow_sde.o
-#flow_sde.so-FLAGS := 
-
+pde_engine.so-OBJS := pde_engine.o ldlua_register.o ldlua_pkb.o 
+pde_engine.so-FLAGS := 
 
 OBJS_NAME := $(foreach obj, $(addsuffix -OBJS,$(LIBS_NAME)), $($(obj)))
 
@@ -32,11 +29,11 @@ CLEAN_LIST += $(DYNLIBS) *~
 
 -include $(DEPS_$(d))
 
-$(OBJ_DIR)/%.o: $(d)/%.c 
+$(OBJ_DIR)/%.o: $(d)/%.c
 	$(COMPILE) 
 
-$(DYNLIB):$(OBJ_DIR)/$($(notdir $(DYNLIB))-OBJS)
-	$(CC) -fPIC -shared -o $@ $^ -llua
+$(DYNLIB):$(addprefix $(OBJ_DIR)/,$($(notdir $(DYNLIB))-OBJS))
+	$(CC) -fPIC -shared -o $@ $^ -L$(LUA_LIB_PATH) -llua
 
 #  standard component Makefile footer
 d   :=  $(dirstack_$(sp))

@@ -75,10 +75,11 @@ int32_t module_list_start(module_hd_t *head);
  * 
  * @param head_p 模块头指针
  * @param tag_p tag头指针 
+ * @param init_data 初始传入的data
  *
  * @return 0，成功；< 0，失败原因；
  */
-int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p);
+int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, void *init_data);
 /** 
  * 根据模块名称，获取模块信息
  * 
