@@ -10,7 +10,7 @@
 
 *\#
 obj/
-lib/third
+lib/third/build
 obj-*/
 cvmx-config.h
 l7detect

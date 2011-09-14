@@ -6,6 +6,7 @@ enum sys_code {
 	NO_SPACE_ERROR,
 	FINI_ERROR,
 	ITEM_NOT_FOUND,
+	CONFIG_ERROR, 
 };
 
 

@@ -60,7 +60,8 @@ static int32_t sf_plugin_init(module_info_t *this)
 
 	info->plugin = module_list_create(plugin_num);
 	info->plugin_num = plugin_num;
-	zmalloc(info->handle, void **, sizeof(void *) * plugin_num);
+	info->handle = zmalloc(void **, sizeof(void *) * plugin_num);
+	if_error_return(info->handle != NULL, -NO_SPACE_ERROR);
 	i = 0;
 
 	do {
@@ -105,7 +106,6 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 	sf_plugin_info_t *info;
 	
 	info = (sf_plugin_info_t *)this->resource;
-	
 	module_list_process(info->plugin, NULL, data);
 	return 0;
 }

@@ -33,7 +33,7 @@ $(OBJ_DIR)/%.o: $(d)/%.c
 	$(COMPILE) 
 
 $(DYNLIB):$(addprefix $(OBJ_DIR)/,$($(notdir $(DYNLIB))-OBJS))
-	$(CC) -fPIC -shared -o $@ $^ -L$(LUA_LIB_PATH) -llua
+	$(CC) -fPIC -shared -o $@ $^ -L$(LUA_LIB_PATH) -llua -L$(TOP)/build/obj/ -lapi
 
 #  standard component Makefile footer
 d   :=  $(dirstack_$(sp))

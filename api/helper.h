@@ -27,9 +27,11 @@ void list_format_print_body(void *list, int width, int length, int index, int ty
 void list_format_print_buffer(void *list, int width, int length, int type);
 
 
-#define zmalloc(ptr, type, size) do {			\
-		ptr = (type)(malloc(size));			\
-		memset(ptr, 0, size);					\
-	}while(0)
+#define zmalloc(type, size) ({			\
+		type ptr = (type)(malloc(size));			\
+		if (ptr != 0)							\
+			memset(ptr, 0, size);				\
+		ptr;									\
+		} )
 
 #endif

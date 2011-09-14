@@ -40,6 +40,7 @@ extern log_t *syslog_p;
 #define log_debug(log, fmt, args...) log_log(log, DEBUG, fmt, ##args)
 
 #define print printf
+#define err_print(fmt, args...) fprintf(stderr, fmt, ##args)
 #define TRACE print("TRACE:%s:%s, line %d\n", __FILE__,  __FUNCTION__, __LINE__)
 
 #define if_error_return(statement, rv)\
