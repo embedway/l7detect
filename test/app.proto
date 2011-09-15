@@ -1,5 +1,5 @@
 gstate = {init=0, s1=1, s2=2, s3=3, s4=4, s5=5, s6=6, s7=7, s8=8, final=9}
-proto_list={"qq_file", "ppstream",}
+proto_list={"qq_file", "ppstream", "test", "http", "dns", "ssl", "nat"}
 engine_list={"pde", "lde"}
 
 qq_file = {}
@@ -19,12 +19,47 @@ ppstream.lde = function(buf)
 				-- ppsteam head length is 4
 				if (buf:len() >= 3) then
 				if (buf:getbyte(2) == 0x43 and buf:getbyte(3) == 0 and 
-				    buf(0,2):uintbe() == buf:len()-4) then
+				    buf(0,2):uintle() == buf:len()-4) then
 				    state = gstate.final
 				end
 				end
 				return state
 				end
+
+test = {}
+test.lde = function(buf)
+			  	local state
+				-- ppsteam head length is 4
+				if (buf:len() >= 4) then
+				if (buf:getbyte(0) == 0xfe and buf:getbyte(1) == buf:len()-3 and 
+				    buf(2,2):uintle() == 0) then
+				    state = gstate.final
+				end
+				end
+				return state
+				end
+
+nat = {}
+nat.lde = function(buf)
+		      local state
+		      if (buf:len() >= 4) then 
+		      if (buf(0,4):uintbe() == 0x00010008) then
+		          state = gstate.final
+		      end
+	          end
+		  return state
+		  end
+
+http = {}
+http.pde = "tcp/80"
+
+dns = {}
+dns.pde = "udp/53"
+
+ssl = {}
+ssl.pde = "tcp/443"
+
+
 
 --[[for k, v in pairs(qq_chat)
 do

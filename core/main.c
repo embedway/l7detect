@@ -66,7 +66,7 @@ static tag_hd_t* __tag_init()
 	tag_register(tag_hd, "tcp");
 	tag_register(tag_hd, "udp");
 	tag_register(tag_hd, "sf_plugin");
-	
+	tag_register(tag_hd, "parsed");
 	assert(tag_hd);
 	return tag_hd;
 }
@@ -101,6 +101,7 @@ static module_hd_t* __module_init()
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "tcp");
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "udp");
+	module_tag_bind(module_hd_p, pktag_hd_p, "session", "parsed");
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "sf_plugin", "sf_plugin");
 	

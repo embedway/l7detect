@@ -13,11 +13,12 @@
 #include "module_manage.h"
 #include "sf_plugin.h"
 #include "plugin.h"
+#include "process.h"
 
 static int32_t sf_plugin_init(module_info_t *this);
 static int32_t sf_plugin_process(module_info_t *this, void *data);
 static int32_t sf_plugin_fini(module_info_t *this);
-
+static uint16_t parsed_tag;
 #define MAX_STRING_LEN 80
 
 module_ops_t sf_plugin_ops = {					
@@ -113,7 +114,7 @@ static int32_t sf_plugin_init(module_info_t *this)
 		assert(proto_comm->match_mask[i]);
 	}
 	
-
+	parsed_tag = tag_id_get_from_name(pktag_hd_p, "parsed");
 	module_list_init(info->plugin);
 	
 	return 0;
@@ -125,6 +126,7 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 	proto_comm_t *proto_comm;
 	sf_proto_conf_t *pconf;
 	uint32_t i;
+	packet_t *packet = (packet_t *)data;
 
 	info = (sf_plugin_info_t *)this->resource;
 	pconf = info->pconf;
@@ -141,8 +143,12 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 	if (info->plugin_num) {
 		module_list_process(info->plugin, info->tag, proto_comm);
 	}
-
-	return 0;
+	if (proto_comm->app_id > 0) {
+		packet->app_type = proto_comm->app_id;
+	}
+	packet->pktag = parsed_tag;
+	
+	return packet->pktag;
 }
 
 static int32_t sf_plugin_fini(module_info_t *this)

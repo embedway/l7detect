@@ -73,7 +73,7 @@ uint32_t __read_file(char *filename, char **rd_buf, int init_size, int step)
 	char buf[READ_BUF_SIZE];
 	FILE *fp;
 	int fd;
-	char *p, *head;
+	char *p, *head, *tmp;
 	uint32_t total_size, count, read_size;
 
 	assert(filename);
@@ -91,14 +91,17 @@ uint32_t __read_file(char *filename, char **rd_buf, int init_size, int step)
 	read_size = 0;
 
 	total_size = init_size;
+
 	while ((count = read(fd, buf, READ_BUF_SIZE)) != 0) {
 		if ((p + count) > (head + total_size)) {
+			tmp = p;
 			if ((p+count) > (head + total_size) + step) {
 				step = p + count - (head+total_size);
 			}
-			p = realloc(p, total_size + step);
+			p = realloc(head, total_size + step);
 			if (p != NULL) {
 				total_size += step;
+				p = tmp;
 			} else {
 				return 0;
 			}
@@ -129,7 +132,9 @@ int32_t __proto_item_read(lua_State *L, char *proto_name, int index, sf_proto_co
 	assert(p->engine_data);
 	
 	for (i=0; i<conf->total_engine_num; i++) {
+		printf("L=%p, proto_name=%s\n", L, proto_name);
 		type = ldlua_table_item_type(L, proto_name, conf->engines[i].name);
+		printf("type=%d\n", type);
 		if (type <= 0) {
 			p->engine_data[i].lua_type = -1;
 		} else {
@@ -140,7 +145,6 @@ int32_t __proto_item_read(lua_State *L, char *proto_name, int index, sf_proto_co
 			char *str;
 			str = ldlua_table_key_get_string(L, proto_name, conf->engines[i].name);
 			assert(str && strlen(str) > 0);
-			
 			p->engine_data[i].data = malloc(strlen(str) + 1);
 			assert(p->engine_data[i].data);
 			strcpy(p->engine_data[i].data, str);
@@ -168,6 +172,7 @@ sf_proto_conf_t *__proto_conf_read()
 		return NULL;
 	} else {
 		print("read size %d\n", read_size);
+
 		L = luaL_newstate();
 		assert(L);
 		luaL_openlibs(L);
@@ -185,10 +190,10 @@ sf_proto_conf_t *__proto_conf_read()
 	assert(total_engine_num);
 
 	sf_conf->total_engine_num = total_engine_num;
-	
+
 	sf_conf->engines = zmalloc(detect_engine_t *, total_engine_num * sizeof(detect_engine_t));
 	assert(sf_conf->engines);
-
+	
 	for (i=1; i<=total_engine_num; i++) {
 		char *p;
 		p = ldlua_table_raw_get_string(L, ENGINE_LIST_NAME, i);
@@ -211,6 +216,7 @@ sf_proto_conf_t *__proto_conf_read()
 					  i, lua_typename(L, lua_type(L, -1)));
 		}
 	}
+
 	__proto_conf_show(sf_conf);
 
 	lua_close(L);

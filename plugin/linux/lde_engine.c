@@ -81,7 +81,6 @@ static int32_t lde_match(void *data, uint32_t app_id)
 		state = lua_tonumber(L, -1);
 		lua_pop(L, 2);
 		if (state == 9) {
-			printf("app %s, state %d\n", conf->protos[app_id].name, state);
 			return 0;
 		}
 	}
@@ -158,7 +157,6 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 	}
 	if (app_id > 0) {
 		proto_comm->app_id = app_id;
-		print("app_id=%d\n", app_id);
 	} 
 	return tag;
 }

@@ -204,7 +204,6 @@ static int32_t pde_engine_process(module_info_t *this, void *data)
 	}
 	if (app_id >= 0) {
 		proto_comm->app_id = app_id;
-		print("app_id=%d\n", app_id);
 	} 
 	return tag;
 }
@@ -222,7 +221,6 @@ static int32_t pde_engine_fini(module_info_t *this)
 			}
 		}
 	}
-	
 	
 	if (info) {
 		free(info);

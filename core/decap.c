@@ -213,6 +213,7 @@ do_decap_ipv4:
 	ptr += ipv4->hdr_len * 4;
 	ip_protocol = ipv4->protocol;
 	packet->real_applen = ntohs(ipv4->length) - ipv4->hdr_len * 4;
+	packet->app_type = -1;
 	
 	switch (ip_protocol) {
 	case DPI_IPPROT_ICMP:
