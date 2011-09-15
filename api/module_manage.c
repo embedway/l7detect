@@ -9,17 +9,19 @@
 #include "common.h"
 #include "module_manage.h"
 #include "log.h"
+#include "helper.h"
 
 module_hd_t *module_list_create(int max_module_num)
 {
 	module_hd_t *head_p;
-	head_p = malloc(sizeof(module_hd_t));
+
+	assert(max_module_num);
+	head_p = zmalloc(module_hd_t *, sizeof(module_hd_t));
 	assert(head_p);
-	memset(head_p, 0, sizeof(module_hd_t));
 
 	head_p->module_max = max_module_num + 1;
 	head_p->module_valid = 0;
-	head_p->module_info = malloc(sizeof(module_info_t) * (max_module_num+1));
+	head_p->module_info = zmalloc(module_info_t *, sizeof(module_info_t) * (max_module_num+1));
 	assert(head_p->module_info);
 	return head_p;
 }
@@ -123,12 +125,12 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, void *init_dat
 		current_ops = current_mod->ops;
 		last_mod = &modules[last];
 		last_ops = last_mod->ops;
+
 		if ((current_ops != NULL) && (current_ops->process != NULL)) {
 			if (last_ops && last_ops->result_get != NULL) {
 				data = last_ops->result_get(last_mod);
-			} else if (!init_data){
-				data = NULL;
-			}
+			} 
+
 			tagid = current_ops->process(&modules[current], data);
 			module_hit_mask |= 1<<current;
 			if (tagid < 0) {

@@ -12,7 +12,7 @@ tag_hd_t *tag_init(int max_tag_num)
 	head->tag_info = (tag_info_t *)malloc(sizeof(tag_info_t) * (max_tag_num+1));
 	assert(head->tag_info);
 
-	head->tag_max = max_tag_num;
+	head->tag_max = max_tag_num + 1;
 	head->tag_valid = 0;
 	memset(head->tag_info, 0, max_tag_num * sizeof(tag_info_t));
 	

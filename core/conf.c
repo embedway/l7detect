@@ -25,7 +25,7 @@ typedef struct conf_list {
 	conf_node_free_callback free_cb;
 } conf_node_t;
 
-static void __proto_conf_show(sf_plugin_conf_t *conf);
+static void __proto_conf_show(sf_proto_conf_t *conf);
 
 
 static void __usage(char *prog_name)
@@ -112,7 +112,7 @@ uint32_t __read_file(char *filename, char **rd_buf, int init_size, int step)
 	return read_size;
 }
 
-int32_t __proto_item_read(lua_State *L, char *proto_name, int index, sf_plugin_conf_t *conf)
+int32_t __proto_item_read(lua_State *L, char *proto_name, int index, sf_proto_conf_t *conf)
 {
 	uint32_t i;
 	int type;
@@ -150,19 +150,17 @@ int32_t __proto_item_read(lua_State *L, char *proto_name, int index, sf_plugin_c
 }
 
 
-sf_plugin_conf_t *__proto_conf_read()
+sf_proto_conf_t *__proto_conf_read()
 {
-	sf_plugin_conf_t *sf_conf;
+	sf_proto_conf_t *sf_conf;
 	uint32_t read_size;
 	lua_State *L;
 	int error;
 	int proto_num, total_engine_num;
 	int i;
 
-	sf_conf = zmalloc(sf_plugin_conf_t *, sizeof(sf_plugin_conf_t));
+	sf_conf = zmalloc(sf_proto_conf_t *, sizeof(sf_proto_conf_t));
 	assert(sf_conf);
-
-	sf_conf->name = "app_parser";
 
 	read_size = __read_file(g_conf.protofile, &sf_conf->app_luabuf, READ_BUF_SIZE, READ_BUF_SIZE);
 	if (read_size == 0) {
@@ -214,12 +212,12 @@ sf_plugin_conf_t *__proto_conf_read()
 		}
 	}
 	__proto_conf_show(sf_conf);
-	sf_conf->L = L;
-	
+
+	lua_close(L);
 	return sf_conf;
 }
 
-void __proto_conf_show(sf_plugin_conf_t *conf)
+void __proto_conf_show(sf_proto_conf_t *conf)
 {
 	uint32_t i, j;
 	
@@ -242,19 +240,18 @@ void __proto_conf_show(sf_plugin_conf_t *conf)
 
 void __proto_conf_free(void *data)
 {
-	sf_plugin_conf_t *conf;
+	sf_proto_conf_t *conf;
 	uint32_t i;
-	
-	conf = (sf_plugin_conf_t *)data;
-	if (conf->L) {
-		lua_close(conf->L);
-	}
+
+	conf = (sf_proto_conf_t *)data;
+
 	if (conf->app_luabuf) {
 		free(conf->app_luabuf);
 	}
 	if (conf->engines) {
 		free(conf->engines);
 	}
+
 	if (conf->protos) {
 		for (i=0; i<conf->total_proto_num; i++) {
 			if (conf->protos[i].name) {
@@ -295,7 +292,7 @@ int32_t conf_read(int argc, char *argv[])
 	/*读取配置文件*/
 	data = __proto_conf_read();
 	assert(data);
-	assert(conf_module_config_insert("proto_conf", data, __proto_conf_free) == 0);
+	assert(conf_module_config_insert(SF_PROTO_CONF_NAME, data, __proto_conf_free) == 0);
 	return 0;
 }
 

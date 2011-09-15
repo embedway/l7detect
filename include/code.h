@@ -1,3 +1,6 @@
+#ifndef __CODE_H__
+#define __CODE_H__
+
 enum sys_code {
 	STATUS_OK = 0,
 	INIT_ERROR,
@@ -13,3 +16,4 @@ enum sys_code {
 enum process_code {
 	UNKNOWN_PKT = 100, 
 };
+#endif

@@ -167,7 +167,7 @@ static int32_t session_compare(void *this, void *user_data, void *item)
 
 static int32_t session_frm_init(module_info_t *this)
 {
-	session_frm_info *info = malloc(sizeof(session_frm_info));
+	session_frm_info *info;
 	session_conf_t *conf;
 	uint32_t i;
 	hash_map_t hash_map[] = {
@@ -177,8 +177,10 @@ static int32_t session_frm_init(module_info_t *this)
 	};
 
 	assert(sizeof(session_item_t) <= 128);
+	info = zmalloc(session_frm_info *, sizeof(session_frm_info));
 	assert(info);
-
+	this->resource = info;
+	
 	conf = (session_conf_t *)conf_module_config_search("session", NULL);
 	assert(conf);
 	info->session_table = hash_table_init(conf->bucket_num, SPINLOCK);
@@ -196,7 +198,6 @@ static int32_t session_frm_init(module_info_t *this)
 	}
 	assert(info->hash_cb);
 	sf_plugin_tag = tag_id_get_from_name(pktag_hd_p, "sf_plugin");
-	this->resource = info;
 
 	return 0;
 }

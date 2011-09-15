@@ -1,34 +1,27 @@
 gstate = {init=0, s1=1, s2=2, s3=3, s4=4, s5=5, s6=6, s7=7, s8=8, final=9}
-proto_list={"qq_file", "qq_chat",}
-engine_list={"pde", "sde", "lde"}
+proto_list={"qq_file", "ppstream",}
+engine_list={"pde", "lde"}
 
 qq_file = {}
-qq_file.pde="udp/8000"
+qq_file.pde="udp/8000,tcp/8000"
 qq_file.lde = function(buf) 
-			   local state
-			   if (buf.index(0) == 0x04 and buf.index(-1) == 0x03) then
-			       state = gstate.final
-			   end
-			   return state
-			   end
+			  local state
+			  if (buf:getbyte(0) == 0x04 and buf:getbyte(-1) == 0x03) then
+			      state = gstate.final
+			  end
+			      return state
+			  end
 
-qq_chat = {}
-qq_chat.pde = "udp/8000"
-qq_chat.lde = function(buf)
-			   local state
-			   if (buf.index(0) == 0x02 and buf.index(-1) == 0x03) then
-			       state = gstate.final
-			   end
-			   return state
-			   end
 
 ppstream = {}
 ppstream.lde = function(buf)
 			  	local state
 				-- ppsteam head length is 4
-				if (buf.index(2) == 0x43 and buf.index(3) == 0 and 
-				    buf(0,2):uint() == buf:len()-4) then
+				if (buf:len() >= 3) then
+				if (buf:getbyte(2) == 0x43 and buf:getbyte(3) == 0 and 
+				    buf(0,2):uintbe() == buf:len()-4) then
 				    state = gstate.final
+				end
 				end
 				return state
 				end

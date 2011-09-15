@@ -84,3 +84,4 @@ int32_t log_fini(log_t **log_pp)
 	*log_pp = NULL;
 	return 0;
 }
+

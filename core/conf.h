@@ -4,9 +4,14 @@
 #include "common.h"
 #include "list.h"
 #include "lua_ci.h"
+#include "log.h"
 
 #define common_free_cb free
 #define ENGINE_NAME_LEN 10
+#define SF_PROTO_CONF_NAME "proto_conf"
+
+#define INVALID_ENGINE_ID 65536
+#define INVALID_PROTO_ID 65536
 
 enum {
 	MODE_NOT_SET,
@@ -28,7 +33,7 @@ typedef struct proto_engine_data {
 
 typedef struct proto_conf {
 	char *name;
-	uint16_t engine_mask;
+	uint32_t engine_mask;
 	proto_engine_data_t *engine_data;
 } proto_conf_t;
 
@@ -36,15 +41,15 @@ typedef struct detect_engine {
 	char name[ENGINE_NAME_LEN];
 } detect_engine_t;
 
-typedef struct sf_plugin_conf {
-	char *name;
+typedef struct sf_proto_conf {
 	lua_State *L;
 	char *app_luabuf;
+	log_t *proto_log;
 	uint32_t total_engine_num;
 	uint32_t total_proto_num;
 	detect_engine_t *engines;
 	proto_conf_t *protos;
-}sf_plugin_conf_t;
+} sf_proto_conf_t;
 
 typedef struct conf {
 	int mode;

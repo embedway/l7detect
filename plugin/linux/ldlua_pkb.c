@@ -9,7 +9,8 @@ LDLUA_METHOD pkb_range(lua_State* L);
 LDLUA_METHOD pkb_len(lua_State* L);
 LDLUA_METHOD pkb_gc(lua_State *L);
 //LDLUA_METHOD pkb_tostring(lua_State *);
-LDLUA_METHOD pkbrange_uint(lua_State* L);
+LDLUA_METHOD pkbrange_uintbe(lua_State* L);
+LDLUA_METHOD pkbrange_uintle(lua_State* L);
 LDLUA_METHOD pkbrange_gc(lua_State *L);
 LDLUA_CLASS_DEFINE(pkb,FAIL_ON_NULL("expired pkb"),NOP);
 LDLUA_CLASS_DEFINE(pkbrange,FAIL_ON_NULL("expired pkbrange"),NOP);
@@ -29,7 +30,8 @@ static const luaL_reg pkb_meta[] = {
 };
 
 static const luaL_reg pkbrange_methods[] = {
-	{"uint", pkbrange_uint},
+	{"uintbe", pkbrange_uintbe},
+	{"uintle", pkbrange_uintle},
 	{NULL, NULL},
 };
 static const luaL_reg pkbrange_meta[] = {
@@ -103,7 +105,7 @@ LDLUA_METHOD pkb_range(lua_State* L)
 	/* Creates a pkbr from this pkb. This is used also as the pkb:__call() metamethod. */
 #define LDLUA_OPTARG_PKB_RANGE_OFFSET 2 /* The offset (in octets) from the begining of the pkb. Defaults to 0. */
 #define LDLUA_OPTARG_PKB_RANGE_LENGTH 3 /* The length (in octets) of the range. Defaults to until the end of the pkb. */
-
+	
     pkb pkt = check_pkb(L,1);
     int offset = luaL_optint(L,LDLUA_OPTARG_PKB_RANGE_OFFSET,0);
     int len = luaL_optint(L,LDLUA_OPTARG_PKB_RANGE_LENGTH,-1);
@@ -136,7 +138,7 @@ LDLUA_METHOD pkb_gc(lua_State *L)
 	return 0;
 }
 
-LDLUA_METHOD pkbrange_uint(lua_State* L)
+LDLUA_METHOD pkbrange_uintbe(lua_State* L)
 {
 	pkbrange pkbr = check_pkbrange(L, 1);
 	pkb packet;
@@ -161,7 +163,38 @@ LDLUA_METHOD pkbrange_uint(lua_State* L)
 		lua_pushnumber(L, htonl(*(uint32_t *)(app_data + offset)));
 		return 1;
 	default:
-		luaL_error(L, "pkbrange:get_uint() does not handle %d byte integers\n", pkbr->length);
+		luaL_error(L, "pkbrange:get_uintbe() does not handle %d byte integers\n", pkbr->length);
+		return 0;
+	}
+	return 0;
+}
+
+LDLUA_METHOD pkbrange_uintle(lua_State* L)
+{
+	pkbrange pkbr = check_pkbrange(L, 1);
+	pkb packet;
+	int offset;
+	void *app_data;
+	if (!(pkbr && pkbr->pkt)) {
+		return 0;
+	}
+
+	packet = pkbr->pkt;
+	offset = pkbr->offset;
+	app_data = packet->data + packet->app_offset;
+	switch (pkbr->length) 
+	{
+	case 1:
+		lua_pushnumber(L, *(uint8_t *)(app_data + offset));
+		return 1;
+	case 2:
+		lua_pushnumber(L, (*(uint16_t *)(app_data + offset)));
+		return 1;
+	case 4:
+		lua_pushnumber(L, (*(uint32_t *)(app_data + offset)));
+		return 1;
+	default:
+		luaL_error(L, "pkbrange:get_uint_le() does not handle %d byte integers\n", pkbr->length);
 		return 0;
 	}
 	return 0;

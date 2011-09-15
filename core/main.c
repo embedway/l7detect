@@ -18,7 +18,6 @@ static void (*original_sig_int)(int num);
 static void (*original_sig_term)(int num);
 
 static int system_exit;
-
 log_t *syslog_p;
 
 void cap_term(int signum)

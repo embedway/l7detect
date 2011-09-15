@@ -18,7 +18,7 @@ struct pkbrange_s {
 void ldlua_register_classes(lua_State* L);
 void ldlua_register_functions(lua_State* L);
 
-#define LDLUA_INIT(L)		   \
+#define PKB_LUA_INIT(L)		   \
 	luaL_openlibs(L);		   \
 	ldlua_register_classes(L); \
 	ldlua_register_functions(L);

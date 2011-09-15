@@ -1,21 +1,37 @@
 #include <string.h>
 #include <assert.h>
+
 #include "common.h"
+#include "decap.h"
 #include "plugin.h"
 #include "module_manage.h"
 #include "conf.h"
 #include "log.h"
 #include "parser.h"
-
+#include "helper.h"
 
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
 #include "ldlua.h"
+#include "engine_comm.h"
 
 static int32_t pde_engine_init(module_info_t *this);
 static int32_t pde_engine_process(module_info_t *this, void *data);
 static int32_t pde_engine_fini(module_info_t *this);
+
+static log_t *ptlog_p;
+
+#define PDE_PROTO_NUM 2 /*TCP or UDP*/
+#define PDE_PORT_NUM 65536
+
+#define skip_space(p) do {						\
+		if (*p == ' ') {							\
+			p++;								\
+		} else {								\
+			break;								\
+		}										\
+	} while(p)
 
 module_ops_t pde_engine_ops = {
 	.init = pde_engine_init,
@@ -25,92 +41,192 @@ module_ops_t pde_engine_ops = {
 	.result_free = NULL,
 	.fini = pde_engine_fini,
 };
+
 typedef struct pde_engine_info{
-	lua_State *lua_v;
-	sf_plugin_conf_t *conf;
-} pde_engine_info;
+	sf_proto_conf_t *conf;
+	uint32_t pde_engine_id;
+	longmask_t* pde_table[PDE_PROTO_NUM][PDE_PORT_NUM];
+	//list_head_t *pde_table[PDE_PROTO_NUM];
+} pde_engine_info_t;
 
-#if 0
-static void l_message (const char *pname, const char *msg) {
-	if (pname) fprintf(stderr, "%s: ", pname);
-	fprintf(stderr, "%s\n", msg);
-	fflush(stderr);
-}
+kv_table_t pde_prot[] = {
+	{"tcp", DPI_IPPROT_TCP},
+	{"udp", DPI_IPPROT_UDP},
+	{NULL, 0},
+};
 
-static int report (lua_State *L, int status) {
-	if (status && !lua_isnil(L, -1)) {
-		const char *msg = lua_tostring(L, -1);
-		if (msg == NULL) msg = "(error object is not a string)";
-		l_message("l7detect", msg);
-		lua_pop(L, 1);
-	}
-	return status;
-}
-
-static int32_t __luaL_loadbuffer(lua_State *L, char *data, uint32_t len, char *name)
+static int32_t __parse_pde_proto_conf(proto_conf_t *proto_conf, 
+									  uint32_t app_id, uint32_t engine_id,
+									  longmask_t* pde_table[PDE_PROTO_NUM][PDE_PORT_NUM])
 {
-	int status = luaL_loadbuffer(L, data, len, name) || lua_pcall(L, 0, 0, 0);
-	return report(L, status);
+	char *pde_str, *p, *q;
+	uint16_t proto, port;
+	int32_t i;
+	proto_engine_data_t *engine_data;
+	
+	engine_data = &proto_conf->engine_data[engine_id];
+	assert(engine_data);
+
+	if (engine_data->lua_type != LUA_TSTRING) {
+		log_error(ptlog_p, "pde data type error:%d\n", engine_data->lua_type);
+		return -INVALID_PARAM;
+	} else {
+		pde_str = engine_data->data;
+		p = pde_str;
+		do {
+			q = strtok(p, ",");
+			p = NULL;
+			if (q != NULL) {
+				skip_space(q);
+				i = kv_get_index_from_key(pde_prot, q);
+				if (i < 0 || i >= PDE_PROTO_NUM) {
+					log_error(ptlog_p, "pde format error, protocol not found:%s\n", q);
+					return -INVALID_PARAM;
+				} else {
+					q += strlen(pde_prot[i].key);
+					proto = i;
+					skip_space(q);
+					if (*q++ != '/') {
+						log_error(ptlog_p, "pde format error, slice not found:%s\n", q);
+						return -INVALID_PARAM;
+					}
+					port = strtoull(q, NULL, 0);
+					if (port == 0) {
+						log_error(ptlog_p, "pde format error, port not found:%s\n", q);
+						return -INVALID_PARAM;
+					}
+					
+					longmask_bit_set(pde_table[proto][port], app_id);
+				}
+			}
+		} while(q != NULL);
+	}
+	return 0;
 }
-#endif
+
+static int32_t __pde_conf_read(sf_proto_conf_t *conf, uint32_t pde_engine_id,
+							   longmask_t* pde_table[PDE_PROTO_NUM][PDE_PORT_NUM])
+{
+	uint32_t i;
+	proto_conf_t *protos = conf->protos;
+	//int32_t proto_id;
+	
+	assert(protos);
+
+	for (i=0; i<conf->total_proto_num; i++) {
+		if ((conf->protos[i].engine_mask & (1<<pde_engine_id)) == 0) {
+			continue;
+		}
+		if (__parse_pde_proto_conf(&conf->protos[i], i, pde_engine_id,
+								   pde_table) != 0) {
+			log_error(ptlog_p, "parse protocol [%s] error, system halt\n", conf->protos[i].name);
+			exit(-1);
+		}
+	}
+	return 0;
+}
 
 static int32_t pde_engine_init(module_info_t *this)
 {
-	sf_plugin_conf_t *conf = (sf_plugin_conf_t *)this->resource;
-	lua_State *L;
-	pde_engine_info *info;
+	sf_proto_conf_t *conf = (sf_proto_conf_t *)this->resource;
+	pde_engine_info_t *info;
+	int32_t status;
+	uint32_t i, j;
 
-	info = zmalloc(pde_engine_info *, sizeof(pde_engine_info));
-	if_error_return(info != NULL, -NO_SPACE_ERROR);
-	L = luaL_newstate();
-	assert(L);
-	
-	LDLUA_INIT(L);
-	
-	info->lua_v = L;
+	info = zmalloc(pde_engine_info_t *, sizeof(pde_engine_info_t));
+	assert(info);
+
 	info->conf = conf;
-	
-	//__luaL_loadbuffer(L, conf->data, strlen(conf->data), "pde");
+	ptlog_p = conf->proto_log;
 
-	/*必须在此之前处理完所有的配置*/	
-	this->resource = (pde_engine_info *)info;
+	for (i=0; i<PDE_PROTO_NUM; i++) {
+		longmask_t *p;
+		for (j=0; j<PDE_PORT_NUM; j++) {
+			p = longmask_create(conf->total_proto_num);
+			assert(p);
+			info->pde_table[i][j] = p;
+		}
+	}
+
+	info->pde_engine_id = engine_id_get(conf, "pde");
+	assert(info->pde_engine_id != INVALID_ENGINE_ID);
+	
+   	status = __pde_conf_read(conf, info->pde_engine_id, info->pde_table);
+	assert(status == 0);
+
+	this->resource = (pde_engine_info_t *)info;
 	return 0;
 }
 
 static int32_t pde_engine_process(module_info_t *this, void *data)
 {
-	packet_t *packet = (packet_t *)data;
-	//void *app_data = packet->data + packet->app_offset;
-	//uint32_t app_len = packet->len - packet->app_offset;
+	proto_comm_t *proto_comm;
+	packet_t *packet;
+	dpi_ipv4_hdr_t *iphdr;
+	dpi_l4_hdr_t *l4hdr;
+	int proto_index;
+	pde_engine_info_t *info;
+	uint16_t port;
+	sf_proto_conf_t *conf;
+	uint32_t tag = 0;
+	int32_t app_id;
 
-	pde_engine_info *info;
-	sf_plugin_conf_t *conf;
-	lua_State *L;
-	int error;
-	
-	info = (pde_engine_info *)this->resource;
+	info = (pde_engine_info_t *)this->resource;
 	conf = info->conf;
-	L = info->lua_v;
-
-	lua_getglobal(L, "fx");
-	push_pkb_to_stack(L, packet);
-	error = lua_pcall(L, 1, 0, 0);
-	luaL_openlibs(L);
-	if (error) {
-		fprintf(stderr, "%s", lua_tostring(L, -1));
-		lua_pop(L, 1);
-	}
+	proto_comm = (proto_comm_t *)data;
+	packet = proto_comm->packet;
 	
-	return 0;
+	iphdr = (dpi_ipv4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-2]);
+	l4hdr = (dpi_l4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-1]);
+	
+	proto_index = kv_get_index_from_value(pde_prot, iphdr->protocol);
+	if ((proto_index == -1) || (proto_index >= PDE_PROTO_NUM)) {
+		return info->pde_engine_id + 1;
+	} 
+
+	if ((packet->dir & PKT_DIR_MASK) == PKT_DIR_UPSTREAM) {
+		port = ntohs(l4hdr->dst_port);
+	} else {
+		port = ntohs(l4hdr->src_port);
+	}
+
+	/*处理上一个引擎发过来的mask*/
+	longmask_op_and(proto_comm->match_mask[info->pde_engine_id], info->pde_table[proto_index][port]);
+	app_id = handle_engine_mask(conf, proto_comm->match_mask[info->pde_engine_id], 
+								proto_comm->match_mask, info->pde_engine_id, 
+								&tag, 1);
+	longmask_all_clr(proto_comm->match_mask[info->pde_engine_id]);
+	
+	if (app_id < 0) {
+		/*处理本引擎开始的mask*/
+		app_id = handle_engine_mask(conf, info->pde_table[proto_index][port], proto_comm->match_mask,
+									info->pde_engine_id, &tag, 0);
+	}
+	if (app_id >= 0) {
+		proto_comm->app_id = app_id;
+		print("app_id=%d\n", app_id);
+	} 
+	return tag;
 }
 
 static int32_t pde_engine_fini(module_info_t *this)
 {
-	pde_engine_info *info;
+	pde_engine_info_t *info;
+	uint32_t i, j;
+
+	info = (pde_engine_info_t *)this->resource;
+	for (i=0; i<PDE_PROTO_NUM; i++) {
+		for (j=0; j<PDE_PORT_NUM; j++) {
+			if (info->pde_table[i][j] != NULL) {
+				longmask_destroy(info->pde_table[i][j]);
+			}
+		}
+	}
 	
-	info = (pde_engine_info *)this->resource;
-	if (info->lua_v != NULL) {
-		lua_close(info->lua_v);
+	
+	if (info) {
+		free(info);
 	}
 	return 0;
 }
+

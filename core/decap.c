@@ -82,7 +82,9 @@ static inline void __pkts_dump(decap_info_t *info)
 	int i;
 	for (i=0; i<info->cap_num; i++) {
 		log_print(syslog_p, "--------------------code:%d-------------------\n", info->cap_pkts[i].code);
-		list_format_print_buffer(info->cap_pkts[i].pkts_cap, 8, info->cap_pkts[i].pkts_len, FORMAT_PRINT_WITH_HEAD);
+		list_format_print_buffer(syslog_p, 
+								 info->cap_pkts[i].pkts_cap, 8, 
+								 info->cap_pkts[i].pkts_len, FORMAT_PRINT_WITH_HEAD);
 		log_print(syslog_p, "\n");
 	}
 

@@ -3,11 +3,13 @@ dirstack_$(sp)  :=  $(d)
 d               :=  $(dir)
 
 #  component specification
-LIBS_NAME := pde_engine.so 
-#flow_sde.so
+LIBS_NAME := pde_engine.so lde_engine.so 
 
-pde_engine.so-OBJS := pde_engine.o ldlua_register.o ldlua_pkb.o 
+pde_engine.so-OBJS := pde_engine.o engine_comm.o
 pde_engine.so-FLAGS := 
+
+lde_engine.so-OBJS := lde_engine.o ldlua_register.o ldlua_pkb.o engine_comm.o
+lde_engine.so-LDFLAG := -L$(LUA_LIB_PATH) -llua 
 
 OBJS_NAME := $(foreach obj, $(addsuffix -OBJS,$(LIBS_NAME)), $($(obj)))
 
@@ -33,7 +35,7 @@ $(OBJ_DIR)/%.o: $(d)/%.c
 	$(COMPILE) 
 
 $(DYNLIB):$(addprefix $(OBJ_DIR)/,$($(notdir $(DYNLIB))-OBJS))
-	$(CC) -fPIC -shared -o $@ $^ -L$(LUA_LIB_PATH) -llua -L$(TOP)/build/obj/ -lapi
+	$(CC) -fPIC -shared -o $@ $^ $($(notdir $(DYNLIB))-LDFLAG) -L$(TOP)/build/obj/ -lapi
 
 #  standard component Makefile footer
 d   :=  $(dirstack_$(sp))

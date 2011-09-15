@@ -5,7 +5,6 @@
 
 #ifdef __linux__
 #include <dlfcn.h>
-#include "plugin.h"
 #endif
 	
 #include "common.h"
@@ -13,6 +12,7 @@
 #include "conf.h"
 #include "module_manage.h"
 #include "sf_plugin.h"
+#include "plugin.h"
 
 static int32_t sf_plugin_init(module_info_t *this);
 static int32_t sf_plugin_process(module_info_t *this, void *data);
@@ -30,83 +30,118 @@ typedef struct sf_plugin_info {
 	uint32_t plugin_num;
 	void **handle;
 	module_hd_t *plugin;
+	tag_hd_t *tag;
+	sf_proto_conf_t *pconf;
+	proto_comm_t proto_comm;
 } sf_plugin_info_t;
 
 static int32_t sf_plugin_init(module_info_t *this)
 {
 	module_ops_t *ops;
-	sf_plugin_conf_t *pconf;
 	sf_plugin_info_t *info;
 	char filename[MAX_STRING_LEN];
 	char opsname[MAX_STRING_LEN];
-	uint32_t plugin_num, i;
+	uint32_t i;
 	module_info_t *plugin_info;
 	int32_t status;
+	sf_proto_conf_t *pconf;
+	proto_comm_t *proto_comm;
 
-	info = malloc(sizeof(sf_plugin_info_t));
+
+	info = zmalloc(sf_plugin_info_t *, sizeof(sf_plugin_info_t));
 	assert(info);
+
+	this->resource = info;
+	pconf = conf_module_config_search(SF_PROTO_CONF_NAME, NULL);
+	assert(pconf);	
+
+	info->plugin_num = pconf->total_engine_num;
+	info->pconf = pconf;
 	
-	memset(info, 0, sizeof(sf_plugin_info_t));
-
-	pconf = NULL;
-	plugin_num = 0;
-	i = 0;
-	do {
-		pconf = conf_module_config_search("sf_plugin", pconf);
-		if (pconf != NULL) {
-			plugin_num++;
-		} 
-	}while (pconf != NULL);
-
-	info->plugin = module_list_create(plugin_num);
-	info->plugin_num = plugin_num;
-	info->handle = zmalloc(void **, sizeof(void *) * plugin_num);
+	if (info->plugin_num == 0) {
+		return 0;
+	}
+	info->plugin = module_list_create(info->plugin_num);
+	assert(info->plugin);
+	
+	info->tag = tag_init(info->plugin_num);
+	assert(info->tag);
+	log_debug(syslog_p, "plugin number %d\n", info->plugin_num);
+	
+	info->handle = zmalloc(void **, sizeof(void *) * info->plugin_num);
 	if_error_return(info->handle != NULL, -NO_SPACE_ERROR);
 	i = 0;
 
-	do {
-		pconf = conf_module_config_search("sf_plugin", pconf);
-		if (pconf != NULL) {
-			sprintf(filename, ".libs/%s.so", pconf->name);
-			log_notice(syslog_p, "open plugin %s\n", pconf->name); 
-			info->handle[i] = dlopen(filename, RTLD_LAZY);
-			log_notice(syslog_p, "plugin handle %p\n", info->handle[i]); 
-			assert(info->handle[i]);
-			
-			sprintf(opsname, "%s_ops", pconf->name);
-			
-			ops = (module_ops_t *)dlsym(info->handle[i], opsname);
-			
-			if (dlerror() != NULL)  {
-				log_error(syslog_p, "%s", dlerror());
-				exit(-1);
-			}
-			assert(ops);
-			status = module_list_add(info->plugin, pconf->name, ops);
-			assert(status == 0);
-
-/*fixme:查到对应的plugin，通过设置resource来传入配置*/
-			plugin_info = module_info_get_from_name(info->plugin, pconf->name);
-			assert(plugin_info);
-
-			plugin_info->resource = pconf;
-			i++;
-		} else {
-			break;
+	for (i=0; i<pconf->total_engine_num; i++) {
+		sprintf(filename, ".libs/%s_engine.so", pconf->engines[i].name);
+		log_notice(syslog_p, "open plugin %s\n", filename); 
+		info->handle[i] = dlopen(filename, RTLD_LAZY);
+		log_notice(syslog_p, "plugin handle %p\n", info->handle[i]); 
+		if (!info->handle[i]) {
+			log_notice(syslog_p, "%s\n", dlerror());
 		}
-	} while (1);
+		assert(info->handle[i]);
+		
+		sprintf(opsname, "%s_engine_ops", pconf->engines[i].name);
+		
+		ops = (module_ops_t *)dlsym(info->handle[i], opsname);
+		
+		if (dlerror() != NULL)  {
+			log_error(syslog_p, "%s\n", dlerror());
+			exit(-1);
+		}
+		assert(ops);
+		status = module_list_add(info->plugin, pconf->engines[i].name, ops);
+		assert(status == 0);
+		
+		tag_register(info->tag, pconf->engines[i].name);
+		module_tag_bind(info->plugin, info->tag, pconf->engines[i].name, pconf->engines[i].name);
+		
+/*fixme:查到对应的plugin，通过设置resource来传入配置*/
+		plugin_info = module_info_get_from_name(info->plugin, pconf->engines[i].name);
+		assert(plugin_info);
+		pconf->proto_log = syslog_p;
+		plugin_info->resource = pconf;
+	} 
+
+	proto_comm = &info->proto_comm;
+	proto_comm->match_mask = zmalloc(longmask_t **, sizeof(longmask_t *) * pconf->total_engine_num);
+	assert(proto_comm->match_mask);
+
+	for (i=0; i<pconf->total_engine_num; i++) {
+		proto_comm->match_mask[i] = longmask_create(pconf->total_proto_num);
+		assert(proto_comm->match_mask[i]);
+	}
 	
+
 	module_list_init(info->plugin);
-	this->resource = info;	
+	
 	return 0;
 }
 
 static int32_t sf_plugin_process(module_info_t *this, void *data)
 {
 	sf_plugin_info_t *info;
-	
+	proto_comm_t *proto_comm;
+	sf_proto_conf_t *pconf;
+	uint32_t i;
+
 	info = (sf_plugin_info_t *)this->resource;
-	module_list_process(info->plugin, NULL, data);
+	pconf = info->pconf;
+	proto_comm = &info->proto_comm;
+
+	proto_comm->packet = data;
+	proto_comm->engine_mask = 0;
+	proto_comm->app_id = 0;
+	
+	for (i=0; i<pconf->total_engine_num; i++) {
+		longmask_all_clr(proto_comm->match_mask[i]);
+	}
+	
+	if (info->plugin_num) {
+		module_list_process(info->plugin, info->tag, proto_comm);
+	}
+
 	return 0;
 }
 
@@ -114,10 +149,13 @@ static int32_t sf_plugin_fini(module_info_t *this)
 {
 	uint32_t i;
 	sf_plugin_info_t *info;
-	
+	sf_proto_conf_t *pconf;
+
 	info = (sf_plugin_info_t *)this->resource;
 	module_manage_fini(&info->plugin);
-	
+	tag_fini(&info->tag);
+
+	pconf = info->pconf;
 	for (i=0; i<info->plugin_num; i++) {
 		if (info->handle[i] != NULL) {
 			log_notice(syslog_p, "plugin  %p close\n", info->handle[i]); 	
@@ -125,6 +163,10 @@ static int32_t sf_plugin_fini(module_info_t *this)
 		}
 	}
 	free(info->handle);
+	for (i=0; i<pconf->total_engine_num; i++) {
+		longmask_destroy(info->proto_comm.match_mask[i]);
+	}
+	free(info->proto_comm.match_mask);
 	free(info);
 	return 0;
 }
