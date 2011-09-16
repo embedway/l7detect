@@ -75,7 +75,7 @@ typedef struct session_item {
 	uint64_t id;
 	uint64_t start_time;
 	uint64_t last_time;
-	int32_t app_type;			/**<  协议小类*/
+	uint32_t app_type;			/**<  协议小类*/
 }session_item_t;
 
 typedef uint32_t (*hash_func)(session_index_t *info);
@@ -154,7 +154,7 @@ static inline void __init_session(session_item_t *session, session_index_t *inde
 	memset(session, 0, sizeof(session_item_t));
 	memcpy(&session->index, index, sizeof(session_index_t));
 	session->dir = __session_index_dir(index);
-	session->app_type = -1;
+	session->app_type = INVALID_PROTO_ID;
 }
 
 static uint32_t __post_parsed(hash_table_hd_t *hd, packet_t* packet, session_item_t* session)
@@ -305,7 +305,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	__update_session_count(session, packet);
 	hash_table_unlock(hd, hash, 0);
-	if ((packet->real_applen == 0) || (session->app_type >= 0)) {
+	if ((packet->real_applen == 0) || (session->app_type != INVALID_PROTO_ID)) {
 		/*app length is 0*/
 		return next_stage_tag;
 	} else {
@@ -392,7 +392,8 @@ static void session_item_show(session_frm_info *info)
 					   __get_ip_protocol_name(item->index.protocol),
 					  item->flow[0].pkts, item->flow[1].pkts,
 					  item->flow[0].bytes, item->flow[1].bytes,
-					  (item->app_type >= 0) ? sf_conf->protos[item->app_type].name:"Unknown");
+					  (item->app_type != INVALID_PROTO_ID) ? 
+					  sf_conf->protos[item->app_type].name:"Unknown");
 		}
 		hash_table_unlock(session_table, i, 0);
 		if (bucket > max_bucket) {

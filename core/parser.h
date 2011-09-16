@@ -19,7 +19,7 @@ typedef struct packet {
     uint8_t prot_offsets[MAX_PARSER_DEPTH];
     uint8_t prot_depth;
 	uint8_t app_offset;
-    int16_t app_type;
+    uint16_t app_type;
 	uint32_t len;
 	uint32_t real_applen;/*去除掉pad以后剩余的真正app的长度*/
 	uint8_t *data;
