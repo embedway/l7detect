@@ -18,3 +18,4 @@ TAGS
 cscope.*
 !.gitignore
 test/*.pcap
+tags
