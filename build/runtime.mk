@@ -1,6 +1,4 @@
-
 CHIP=X86
 COMM=NET,POW
 OS=LINUX
-LUA_LIB_PATH=/opt2/lua-5.1.4/lib/
 

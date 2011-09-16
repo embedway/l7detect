@@ -35,8 +35,8 @@ LIBS_LIST := $(LIBS_LIST) $($(TARGET)-LIBS)
 CFLAGS_LOCAL = -g -O2 -W -Wall -Wno-unused-parameter  
 CFLAGS_LOCAL += $($(TARGET)-FLAGS)
 
-CFLAGS_GLOBAL += -I$(TOP)/include -I$(LUA_LIB_PATH)/include
-LDFLAGS_GLOBAL += -lpthread -lpcap -ldl -lm -L$(LUA_LIB_PATH) -llua
+CFLAGS_GLOBAL += -I$(TOP)/include -I$(LIBLUA_DIR)/include
+LDFLAGS_GLOBAL += -lpthread -lpcap -ldl -lm -L$(LIBLUA_DIR)/lib -llua
 include $(TOP)/build/application.mk
 
 CLEAN_LIST += $(OBJS)

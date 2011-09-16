@@ -9,7 +9,8 @@ pde_engine.so-OBJS := pde_engine.o engine_comm.o
 pde_engine.so-FLAGS := 
 
 lde_engine.so-OBJS := lde_engine.o ldlua_register.o ldlua_pkb.o engine_comm.o
-lde_engine.so-LDFLAG := -L$(LUA_LIB_PATH) -llua 
+lde_engine.so-FLAGS := -I L$(LIBLUA_DIR)/include
+lde_engine.so-LDFLAG := -L$(LIBLUA_DIR)/lib -llua 
 
 OBJS_NAME := $(foreach obj, $(addsuffix -OBJS,$(LIBS_NAME)), $($(obj)))
 
