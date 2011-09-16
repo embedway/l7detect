@@ -134,16 +134,16 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 
 	proto_comm->packet = data;
 	proto_comm->engine_mask = 0;
-	proto_comm->app_id = 0;
+	proto_comm->app_id = INVALID_PROTO_ID;
 	
 	for (i=0; i<pconf->total_engine_num; i++) {
 		longmask_all_clr(proto_comm->match_mask[i]);
 	}
-	
+
 	if (info->plugin_num) {
-		module_list_process(info->plugin, info->tag, proto_comm);
+		module_list_process(info->plugin, info->tag, -1, proto_comm);
 	}
-	if (proto_comm->app_id > 0) {
+	if (proto_comm->app_id != INVALID_PROTO_ID) {
 		packet->app_type = proto_comm->app_id;
 	}
 	packet->pktag = parsed_tag;

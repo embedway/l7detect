@@ -96,7 +96,6 @@ static inline int32_t handle_engine_appid(sf_proto_conf_t *conf,
 			if (match(data, bit) != 0) {
 				continue;
 			}
-			
 			/*没有其他引擎需要匹配，那么已经匹配到协议了，直接返回*/
 			if ((engine_mask >> i) == 0) {
 				return bit;

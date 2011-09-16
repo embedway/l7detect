@@ -95,7 +95,6 @@ static int32_t __parse_pde_proto_conf(proto_conf_t *proto_conf,
 						log_error(ptlog_p, "pde format error, port not found:%s\n", q);
 						return -INVALID_PARAM;
 					}
-					
 					longmask_bit_set(pde_table[proto][port], app_id);
 				}
 			}
@@ -178,7 +177,6 @@ static int32_t pde_engine_process(module_info_t *this, void *data)
 	
 	iphdr = (dpi_ipv4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-2]);
 	l4hdr = (dpi_l4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-1]);
-	
 	proto_index = kv_get_index_from_value(pde_prot, iphdr->protocol);
 	if ((proto_index == -1) || (proto_index >= PDE_PROTO_NUM)) {
 		return info->pde_engine_id + 1;
@@ -204,7 +202,9 @@ static int32_t pde_engine_process(module_info_t *this, void *data)
 	}
 	if (app_id >= 0) {
 		proto_comm->app_id = app_id;
-	} 
+	} else {
+		proto_comm->app_id = INVALID_PROTO_ID;
+	}
 	return tag;
 }
 

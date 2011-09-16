@@ -36,7 +36,7 @@ $(OBJ_DIR)/%.o: $(d)/%.c
 	$(COMPILE) 
 
 $(DYNLIB):$(addprefix $(OBJ_DIR)/,$($(notdir $(DYNLIB))-OBJS))
-	$(CC) -fPIC -shared -o $@ $^ $($(notdir $(DYNLIB))-LDFLAG) -L$(TOP)/build/obj/ -lapi
+	$(CC) -fPIC -shared -o $@ $(addprefix $(OBJ_DIR)/,$($(notdir $(DYNLIB))-OBJS)) $($(notdir $(DYNLIB))-LDFLAG) -L$(TOP)/build/obj/ -lapi
 
 #  standard component Makefile footer
 d   :=  $(dirstack_$(sp))

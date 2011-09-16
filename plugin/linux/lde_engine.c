@@ -32,7 +32,7 @@ typedef struct lde_engine_info{
 	lua_State *lua_v;
 	sf_proto_conf_t *conf;
 	longmask_t *lde_pre;/*前面有别的引擎的掩码*/
-	longmask_t *lde_cur;/*lde引擎开始的掩码*/
+	longmask_t *lde_cur;/*lde引擎开始的掩码，为了提高效率和上面的mask分开*/
 	uint32_t lde_engine_id;
 } lde_engine_info_t;
 
@@ -155,9 +155,11 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 									 proto_comm->match_mask, info->lde_engine_id, &tag, 0);
 			
 	}
-	if (app_id > 0) {
+	if (app_id >= 0) {
 		proto_comm->app_id = app_id;
-	} 
+	} else {
+		proto_comm->app_id = INVALID_PROTO_ID;
+	}
 	return tag;
 }
 

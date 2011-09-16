@@ -126,7 +126,7 @@ void __update_session_count(session_item_t *session, packet_t *packet)
 
 static inline int32_t __is_interal_ip(uint32_t ip)
 {
-	if (((ip & 0xff000000) == 0xa0000000) || ((ip & 0xffff0000) == 0xc0a80000) ||
+	if (((ip & 0xff000000) == 0xa000000) || ((ip & 0xffff0000) == 0xc0a80000) ||
 		((ip >= 0xaca00000) && (ip <= 0xac1f0000))) {
 		return 1;
 	} else {
@@ -137,6 +137,7 @@ static inline int32_t __is_interal_ip(uint32_t ip)
 static inline int32_t __session_index_dir(session_index_t *index)
 {
 	int32_t dir;
+
 	if (__is_interal_ip(index->ip[0])) {
 		dir = PKT_DIR_UPSTREAM;
 	} else if (__is_interal_ip(index->ip[1])) {
@@ -298,7 +299,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	if (swap_flag) {
 		/*包的ip1和ip2已经交换过了，所以把包的方向换过来*/
-		packet->dir = session->dir ^ SESSION_DIR_MASK;
+		packet->dir = (session->dir ^ SESSION_DIR_MASK);
 	} else {
 		packet->dir = session->dir;
 	}

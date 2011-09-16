@@ -139,7 +139,7 @@ static inline void longmask_debug_print(longmask_t *mask)
 			data++;
 		}
 	}
-	
+	printf("\n");
 }
 
 static inline void longmask_destroy(longmask_t *mask)

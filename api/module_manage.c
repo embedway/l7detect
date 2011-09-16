@@ -98,7 +98,7 @@ int32_t module_list_start(module_hd_t *head_p)
 	return STATUS_OK;
 }
 
-int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, void *init_data)
+int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, int32_t init_tag, void *init_data)
 {
 	int32_t last, current, tagid;
 	module_info_t *modules, *current_mod, *last_mod;
@@ -113,7 +113,15 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, void *init_dat
 	modules = head_p->module_info;
 
 	last = 0;
-	current = tagid = 1;
+	if (init_tag <= 0) {
+		current = tagid = 1;
+	} else if (tag_p != NULL) {
+		tagid = init_tag;
+		current = module_id_get_from_tag_id(tag_p, tagid);
+	} else {
+		tagid = init_tag;
+		current = init_tag;
+	}
 	if (!init_data) {
 		data = NULL;
 	} else {

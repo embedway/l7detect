@@ -6,7 +6,7 @@ qq_file = {}
 qq_file.pde="udp/8000,tcp/8000"
 qq_file.lde = function(buf) 
 			  local state
-			  if (buf:getbyte(0) == 0x04 and buf:getbyte(-1) == 0x03) then
+			  if (buf:getbyte(0) == 0x02 and buf:getbyte(-1) == 0x03) then
 			      state = gstate.final
 			  end
 			      return state

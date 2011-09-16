@@ -74,12 +74,13 @@ int32_t module_list_start(module_hd_t *head);
  * 模块处理函数，该函数会按照函数返回的tag调用对应的模块处理函数，直到成功处理完所有模块，返回0；或者失败返回错误原因
  * 
  * @param head_p 模块头指针
- * @param tag_p tag头指针 
+ * @param tag_p tag头指针
+ * @param init_tag  初始的tag，如果tag <= 0，那么运行时从第一个module开始，否则从tag绑定的module开始
  * @param init_data 初始传入的data
  *
  * @return 0，成功；< 0，失败原因；
  */
-int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, void *init_data);
+int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, int32_t init_tag, void *init_data);
 /** 
  * 根据模块名称，获取模块信息
  * 
