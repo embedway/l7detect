@@ -5,7 +5,7 @@
 
 typedef struct longmask {
 	uint32_t bit_num; /*最多的bit数*/
-	uint8_t *data;
+	uint8_t data[0];
 } longmask_t;
 
 #include <stdlib.h>
@@ -25,7 +25,6 @@ static inline longmask_t* longmask_create(uint32_t bit_num)
 	mask= zmalloc(longmask_t *, sizeof(longmask_t) + bytes);
 	if (mask != NULL) {
 		mask->bit_num = bit_num;
-		mask->data = (uint8_t *)(mask + 1);
 	}
 
 	return mask;
@@ -37,7 +36,7 @@ static inline void longmask_copy(longmask_t *dst, longmask_t *src)
 
 	assert(dst->bit_num == src->bit_num);
 	bytes = (src->bit_num + 7) / 8;
-	memcpy(dst, src, sizeof(longmask_t) + bytes);
+	memcpy(dst, src, sizeof(longmask_t));
 }
 
 static inline int32_t longmask_bit1_find(longmask_t *mask, uint32_t start_bit)

@@ -165,8 +165,10 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 	if (app_id >= 0) {
 		proto_comm->app_id = app_id;
 		proto_comm->state = state;
+		
 		if (state != (int32_t)conf->final_state) {
 			status = protobuf_setmask(proto_comm->protobuf_head, lde_engine_id, app_id, mask);
+		
 			if (status != 0) {
 				log_error(pt_log, "protobuf setmask error, status %d\n", status);
 				return 0;

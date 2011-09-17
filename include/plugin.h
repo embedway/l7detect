@@ -87,12 +87,12 @@ static inline int32_t protobuf_setmask(list_head_t *head, uint32_t engine_id,
 		free(node);
 		return -NO_SPACE_ERROR;
 	}
-
 	longmask_copy(node->match_mask, mask);
 	
 	for (i=0; i<app_id; i++) {
 		longmask_bit_clr(node->match_mask, i);
 	}
+	
 	return 0;
 }
 
