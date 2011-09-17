@@ -3,9 +3,12 @@
 
 #include "lua_ci.h"
 #include "parser.h"
+#include "plugin.h"
 
-typedef packet_t * pkb;
-typedef struct pkbrange_s * pkbrange;
+typedef packet_t* pkb;
+typedef struct pkbrange_s* pkbrange;
+
+typedef proto_comm_t* session;
 typedef int gboolean;
 
 struct pkbrange_s {
@@ -25,5 +28,6 @@ void ldlua_register_functions(lua_State* L);
 
 int pkb_register(lua_State* L);
 int pkbrange_register(lua_State* L);
+int session_register(lua_State* L);
 pkb* push_pkb_to_stack(lua_State* L, pkb pkt);
 #endif

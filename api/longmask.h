@@ -10,6 +10,7 @@ typedef struct longmask {
 
 #include <stdlib.h>
 #include <assert.h>
+#include <string.h>
 #include "longmask.h"
 #include "helper.h"
 

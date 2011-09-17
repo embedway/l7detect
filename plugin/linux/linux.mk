@@ -8,7 +8,7 @@ LIBS_NAME := pde_engine.so lde_engine.so
 pde_engine.so-OBJS := pde_engine.o engine_comm.o
 pde_engine.so-FLAGS := 
 
-lde_engine.so-OBJS := lde_engine.o ldlua_register.o ldlua_pkb.o engine_comm.o
+lde_engine.so-OBJS := lde_engine.o ldlua_register.o ldlua_pkb.o engine_comm.o ldlua_session.o
 lde_engine.so-FLAGS := -I L$(LIBLUA_DIR)/include
 lde_engine.so-LDFLAG := -L$(LIBLUA_DIR)/lib -llua 
 

@@ -76,6 +76,8 @@ typedef struct session_item {
 	uint64_t start_time;
 	uint64_t last_time;
 	uint32_t app_type;			/**<  协议小类*/
+	uint32_t app_state;         /**< 协议识别状态*/
+	list_head_t protobuf_head;
 }session_item_t;
 
 typedef uint32_t (*hash_func)(session_index_t *info);
@@ -90,6 +92,7 @@ typedef struct session_frm_info {
 	session_index_t index_cache;	/**< 临时的session cache，减小每次进入函数堆栈分配的开销 */
 	hash_func hash_cb;
 	session_frm_stats_t stats;
+	proto_comm_t proto_buf;        /**< 用于处理时传递上一次的数据给sf_plugin */
 } session_frm_info;
 
 typedef struct hash_map {
@@ -156,12 +159,24 @@ static inline void __init_session(session_item_t *session, session_index_t *inde
 	memcpy(&session->index, index, sizeof(session_index_t));
 	session->dir = __session_index_dir(index);
 	session->app_type = INVALID_PROTO_ID;
+	LIST_HEAD_INIT(&session->protobuf_head);
 }
 
-static uint32_t __post_parsed(hash_table_hd_t *hd, packet_t* packet, session_item_t* session)
+static inline uint32_t __post_parsed(hash_table_hd_t *hd, packet_t* packet, session_item_t* session,
+							  proto_comm_t *comm, uint32_t final_state)
 {
 	hash_table_lock(hd, session->index.hash, 0);
-	session->app_type = packet->app_type;
+	if (comm->state == final_state) {
+		session->app_type = packet->app_type;
+		/*do some clean things*/
+		protobuf_destroy(&session->protobuf_head);
+	} else if (comm->state != session->app_state) {
+		/*save status*/
+		session->app_state = comm->state;
+		if (!list_empty(&session->protobuf_head)) {
+			session->protobuf_head = comm->protobuf_head;
+		}
+	}
 	hash_table_unlock(hd, session->index.hash, 0);
 	packet->pktag = next_stage_tag;
 	return packet->pktag;
@@ -226,7 +241,7 @@ static int32_t session_frm_init(module_info_t *this)
 
 static int32_t session_frm_process(module_info_t *this, void *data)
 {
-	packet_t *packet = (packet_t *)data;
+	packet_t *packet;
 	session_frm_info *info = (session_frm_info *)this->resource;
 	session_frm_stats_t *stats;
 	dpi_ipv4_hdr_t *iphdr;
@@ -237,15 +252,27 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	uint32_t hash;
 	uint8_t swap_flag = 0;
 	int32_t status;
+	proto_comm_t *comm = NULL;
 	
 	stats = &info->stats;
 	buf = &info->index_cache;
 	session = info->session;
 	hd = info->session_table;
-	info->packet = data;
+
+	if ((info->packet != NULL) && info->packet != data) {
+		comm = (proto_comm_t *)data;
+		
+		packet = comm->packet;
+		assert(packet == info->packet);
+	} else {
+		packet = (packet_t *)data;
+	}
+	
+	info->packet = packet;
 
 	if (packet->pktag == parsed_tag) {
-		return __post_parsed(hd, packet, session);
+		assert(comm);
+		return __post_parsed(hd, packet, session, comm, info->sf_conf->final_state);
 	}
 
 	if (!(packet->prot_types[packet->prot_depth-2] == DPI_PROT_IPV4)) {
@@ -322,7 +349,17 @@ failed:
 static void* session_frm_result_get(module_info_t *this)
 {
 	session_frm_info *info = this->resource;
-	return info->packet;
+	info->proto_buf.packet = info->packet;
+	
+	assert(info->session);
+	info->proto_buf.state = info->session->app_state;
+
+	if (!list_empty(&info->session->protobuf_head)) {
+		info->proto_buf.protobuf_head = info->session->protobuf_head;
+	} else {
+		LIST_HEAD_INIT(&info->proto_buf.protobuf_head);
+	}
+	return &info->proto_buf;
 }
 
 static void session_frm_result_free(module_info_t *this)

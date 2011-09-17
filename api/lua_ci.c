@@ -41,6 +41,19 @@ char* ldlua_table_key_get_string(lua_State *L, char *table_name, char *key)
 	return p;
 }
 
+int ldlua_table_key_get_num(lua_State *L, char *table_name, char *key)
+{
+	int n = -1;
+	lua_getglobal(L, table_name);
+	assert(CHECK_STACK_ITEM(table, L, -1));
+	
+	lua_getfield(L, -1, key);
+	if (CHECK_STACK_ITEM(number, L, -1)) {
+		n = lua_tonumber(L, -1);
+	} 
+	lua_pop(L, 1);/*balance the stack*/
+	return n;
+}
 
 char *ldlua_table_raw_get_string(lua_State *L, char *table_name, int index)
 {

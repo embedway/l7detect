@@ -202,19 +202,19 @@ LDLUA_METHOD pkbrange_uintle(lua_State* L)
 
 LDLUA_METHOD pkbrange_gc(lua_State *L)
 {
-	pkbrange tvb = check_pkbrange(L,1);
-	free(tvb);
+	pkbrange pkb = check_pkbrange(L,1);
+	free(pkb);
 	return 0;
 }
 
 int pkb_register(lua_State* L) 
 {
 	LDLUA_REGISTER_CLASS(pkb);
-    return 1;
+    return 0;
 }
 
 int pkbrange_register(lua_State* L) 
 {
 	LDLUA_REGISTER_CLASS(pkbrange);
-    return 1;
+    return 0;
 }

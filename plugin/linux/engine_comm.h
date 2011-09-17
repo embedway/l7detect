@@ -5,6 +5,7 @@
 #include "list.h"
 #include "parser.h"
 #include "longmask.h"
+#include "conf.h"
 
 uint32_t engine_id_get(sf_proto_conf_t *conf, char *engine_name);
 uint32_t app_id_get(sf_proto_conf_t *conf, char *app_name);
@@ -69,15 +70,16 @@ static inline int32_t handle_engine_mask(sf_proto_conf_t *conf, longmask_t *this
 }
 
 static inline int32_t handle_engine_appid(sf_proto_conf_t *conf, 
-								   longmask_t *this_mask,
-								   int32_t (*match)(void *data, uint32_t app_id),
-								   void *data,
-								   longmask_t *match_mask[], uint32_t this_engine,
-								   uint32_t *next_engine_tag,
-								   uint32_t pre_stage)
+										  longmask_t *this_mask,
+										  int32_t (*match)(void *data, uint32_t app_id),
+										  void *data,
+										  longmask_t *match_mask[], uint32_t this_engine,
+										  uint32_t *next_engine_tag, uint32_t pre_stage, 
+										  int32_t *state)
 {
 	uint16_t next_engine;
 	int32_t bit, flag = 0;
+	int32_t result;
 	
 	bit = -1;
 	do {
@@ -93,8 +95,13 @@ static inline int32_t handle_engine_appid(sf_proto_conf_t *conf,
 					continue;
 				}
 			}
-			if (match(data, bit) != 0) {
+			if ((result = match(data, bit)) <= 0) {
 				continue;
+			}
+			*state = result;
+			if (result != (int)conf->final_state) {
+				/*中间状态，立即返回*/
+				return bit;
 			}
 			/*没有其他引擎需要匹配，那么已经匹配到协议了，直接返回*/
 			if ((engine_mask >> i) == 0) {

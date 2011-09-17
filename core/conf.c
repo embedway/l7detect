@@ -188,8 +188,10 @@ sf_proto_conf_t *__proto_conf_read()
 
 	total_engine_num = ldlua_table_items_num(L, ENGINE_LIST_NAME);
 	assert(total_engine_num);
-
 	sf_conf->total_engine_num = total_engine_num;
+
+	sf_conf->final_state = ldlua_table_key_get_num(L, "gstate", "final");
+	assert(sf_conf->final_state);
 
 	sf_conf->engines = zmalloc(detect_engine_t *, total_engine_num * sizeof(detect_engine_t));
 	assert(sf_conf->engines);

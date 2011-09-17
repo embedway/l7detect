@@ -19,6 +19,8 @@ static int32_t lde_engine_process(module_info_t *this, void *data);
 static int32_t lde_engine_fini(module_info_t *this);
 static log_t *pt_log;
 
+uint32_t lde_engine_id;
+
 module_ops_t lde_engine_ops = {
 	.init = lde_engine_init,
 	.start = NULL,
@@ -33,7 +35,6 @@ typedef struct lde_engine_info{
 	sf_proto_conf_t *conf;
 	longmask_t *lde_pre;/*前面有别的引擎的掩码*/
 	longmask_t *lde_cur;/*lde引擎开始的掩码，为了提高效率和上面的mask分开*/
-	uint32_t lde_engine_id;
 } lde_engine_info_t;
 
 static int32_t __lde_conf_read(sf_proto_conf_t *conf, uint32_t lde_engine_id, 
@@ -80,11 +81,9 @@ static int32_t lde_match(void *data, uint32_t app_id)
 	} else {
 		state = lua_tonumber(L, -1);
 		lua_pop(L, 2);
-		if (state == 9) {
-			return 0;
-		}
+		return state;
 	}
-	return 1;
+	return 0;
 }
 
 static int32_t lde_engine_init(module_info_t *this)
@@ -118,10 +117,10 @@ static int32_t lde_engine_init(module_info_t *this)
 	info->lua_v = L;
 	
 	info->conf = conf;
-	info->lde_engine_id = engine_id_get(conf, "lde");
-	assert(info->lde_engine_id != INVALID_ENGINE_ID);
+	lde_engine_id = engine_id_get(conf, "lde");
+	assert(lde_engine_id != INVALID_ENGINE_ID);
 
-	__lde_conf_read(conf, info->lde_engine_id, info->lde_pre, info->lde_cur);
+	__lde_conf_read(conf, lde_engine_id, info->lde_pre, info->lde_cur);
 	this->resource = (lde_engine_info_t *)info;
 	return 0;
 }
@@ -135,6 +134,7 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 	lua_State *L;
 	uint32_t tag = 0;
 	int32_t app_id;
+	int32_t status;
 
 	proto_comm = (proto_comm_t *)data;
 	packet = proto_comm->packet;
@@ -144,19 +144,22 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 
 	info->packet = packet;
 
-	app_id = handle_engine_appid(conf, proto_comm->match_mask[info->lde_engine_id], 
+	app_id = handle_engine_appid(conf, proto_comm->match_mask[lde_engine_id], 
 								 lde_match, info,
-								 proto_comm->match_mask, info->lde_engine_id, &tag, 1);
-
-	longmask_all_clr(proto_comm->match_mask[info->lde_engine_id]);
+								 proto_comm->match_mask, lde_engine_id, &tag, 1, 
+								 &status);
+	
+	longmask_all_clr(proto_comm->match_mask[lde_engine_id]);
 	if (app_id < 0) {
 		app_id = handle_engine_appid(conf, info->lde_cur, 
 									 lde_match,  info,
-									 proto_comm->match_mask, info->lde_engine_id, &tag, 0);
+									 proto_comm->match_mask, lde_engine_id, &tag, 0,
+									 &status);
 			
 	}
 	if (app_id >= 0) {
 		proto_comm->app_id = app_id;
+		proto_comm->state = status;
 	} else {
 		proto_comm->app_id = INVALID_PROTO_ID;
 	}

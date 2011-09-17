@@ -18,12 +18,14 @@
 static int32_t sf_plugin_init(module_info_t *this);
 static int32_t sf_plugin_process(module_info_t *this, void *data);
 static int32_t sf_plugin_fini(module_info_t *this);
+static void *sf_plugin_result_get(module_info_t *this);
 static uint16_t parsed_tag;
 #define MAX_STRING_LEN 80
 
 module_ops_t sf_plugin_ops = {					
 	.init = sf_plugin_init,
 	.process = sf_plugin_process,
+	.result_get = sf_plugin_result_get,
 	.fini = sf_plugin_fini,
 };
 
@@ -123,32 +125,60 @@ static int32_t sf_plugin_init(module_info_t *this)
 static int32_t sf_plugin_process(module_info_t *this, void *data)
 {
 	sf_plugin_info_t *info;
-	proto_comm_t *proto_comm;
+	proto_comm_t *session_comm, *proto_comm;
 	sf_proto_conf_t *pconf;
 	uint32_t i;
-	packet_t *packet = (packet_t *)data;
+	packet_t *packet;
+	int32_t init_tag = 0;
 
+	session_comm = (proto_comm_t *)data;
+	packet = (packet_t *)session_comm->packet;
 	info = (sf_plugin_info_t *)this->resource;
 	pconf = info->pconf;
 	proto_comm = &info->proto_comm;
 
-	proto_comm->packet = data;
-	proto_comm->engine_mask = 0;
+	proto_comm->packet = packet;
 	proto_comm->app_id = INVALID_PROTO_ID;
-	
-	for (i=0; i<pconf->total_engine_num; i++) {
-		longmask_all_clr(proto_comm->match_mask[i]);
+	proto_comm->state = session_comm->state;
+
+	if (!list_empty(&session_comm->protobuf_head)) {
+		list_head_t *p, *head;
+
+		head = &session_comm->protobuf_head;
+		list_for_each(p, head) {
+			protobuf_node_t *node = list_entry(p, protobuf_node_t, list);
+			longmask_copy(proto_comm->match_mask[node->engine_id], node->match_mask);
+			if (!init_tag) {
+				init_tag = node->engine_id;
+			}
+		}
+		proto_comm->protobuf_head = session_comm->protobuf_head;
+	} else {
+		LIST_HEAD_INIT(&proto_comm->protobuf_head);
+		for (i=0; i<pconf->total_engine_num; i++) {
+			longmask_all_clr(proto_comm->match_mask[i]);
+		}
+		init_tag = -1;
 	}
 
 	if (info->plugin_num) {
-		module_list_process(info->plugin, info->tag, -1, proto_comm);
+		module_list_process(info->plugin, info->tag, init_tag, proto_comm);
 	}
+
 	if (proto_comm->app_id != INVALID_PROTO_ID) {
 		packet->app_type = proto_comm->app_id;
 	}
 	packet->pktag = parsed_tag;
 	
 	return packet->pktag;
+}
+
+static void *sf_plugin_result_get(module_info_t *this)
+{
+	sf_plugin_info_t *info;
+
+	info = (sf_plugin_info_t *)this->resource;
+	return &info->proto_comm;
 }
 
 static int32_t sf_plugin_fini(module_info_t *this)
@@ -173,6 +203,7 @@ static int32_t sf_plugin_fini(module_info_t *this)
 		longmask_destroy(info->proto_comm.match_mask[i]);
 	}
 	free(info->proto_comm.match_mask);
+	protobuf_destroy(&info->proto_comm.protobuf_head);
 	free(info);
 	return 0;
 }

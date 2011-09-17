@@ -47,6 +47,7 @@ typedef struct sf_proto_conf {
 	log_t *proto_log;
 	uint32_t total_engine_num;
 	uint32_t total_proto_num;
+	uint32_t final_state;
 	detect_engine_t *engines;
 	proto_conf_t *protos;
 } sf_proto_conf_t;

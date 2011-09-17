@@ -91,6 +91,7 @@
 int ldlua_table_items_num(lua_State *L, char *table_name);
 char* ldlua_table_raw_get_string(lua_State *L, char *table_name, int index);
 char* ldlua_table_key_get_string(lua_State *L, char *table_name, char *key);
+int ldlua_table_key_get_num(lua_State *L, char *table_name, char *key);
 int ldlua_table_raw_get_number(lua_State *L, char *table_name, int index);
 int ldlua_table_item_type(lua_State *L, char *table_name, char *key);
 
