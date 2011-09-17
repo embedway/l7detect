@@ -35,6 +35,7 @@ typedef struct lde_engine_info{
 	sf_proto_conf_t *conf;
 	longmask_t *lde_pre;/*前面有别的引擎的掩码*/
 	longmask_t *lde_cur;/*lde引擎开始的掩码，为了提高效率和上面的mask分开*/
+	proto_comm_t *proto_comm;
 } lde_engine_info_t;
 
 static int32_t __lde_conf_read(sf_proto_conf_t *conf, uint32_t lde_engine_id, 
@@ -73,7 +74,8 @@ static int32_t lde_match(void *data, uint32_t app_id)
 	lua_getglobal(L, conf->protos[app_id].name);
 	lua_getfield(L, -1, "lde");
 	push_pkb_to_stack(L, packet);
-	error = lua_pcall(L, 1, 1, 0);
+	push_session_to_stack(L, info->proto_comm);
+	error = lua_pcall(L, 2, 1, 0);
 	
 	if (error) {
 		log_error(pt_log, "%s\n", lua_tostring(L, -1));
@@ -131,10 +133,11 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 	packet_t *packet;
 	lde_engine_info_t *info;
 	sf_proto_conf_t *conf;
+	longmask_t *mask;
 	lua_State *L;
 	uint32_t tag = 0;
-	int32_t app_id;
-	int32_t status;
+	int32_t app_id, status;
+	int32_t state = 0;
 
 	proto_comm = (proto_comm_t *)data;
 	packet = proto_comm->packet;
@@ -143,23 +146,32 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 	L = info->lua_v;
 
 	info->packet = packet;
-
+	info->proto_comm = proto_comm;
+	mask = proto_comm->match_mask[lde_engine_id];
 	app_id = handle_engine_appid(conf, proto_comm->match_mask[lde_engine_id], 
 								 lde_match, info,
 								 proto_comm->match_mask, lde_engine_id, &tag, 1, 
-								 &status);
+								 &state);
 	
 	longmask_all_clr(proto_comm->match_mask[lde_engine_id]);
 	if (app_id < 0) {
+		mask = info->lde_cur;
 		app_id = handle_engine_appid(conf, info->lde_cur, 
 									 lde_match,  info,
 									 proto_comm->match_mask, lde_engine_id, &tag, 0,
-									 &status);
+									 &state);
 			
 	}
 	if (app_id >= 0) {
 		proto_comm->app_id = app_id;
-		proto_comm->state = status;
+		proto_comm->state = state;
+		if (state != (int32_t)conf->final_state) {
+			status = protobuf_setmask(proto_comm->protobuf_head, lde_engine_id, app_id, mask);
+			if (status != 0) {
+				log_error(pt_log, "protobuf setmask error, status %d\n", status);
+				return 0;
+			}
+		}
 	} else {
 		proto_comm->app_id = INVALID_PROTO_ID;
 	}

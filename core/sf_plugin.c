@@ -140,31 +140,31 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 	proto_comm->packet = packet;
 	proto_comm->app_id = INVALID_PROTO_ID;
 	proto_comm->state = session_comm->state;
+	proto_comm->protobuf_head = session_comm->protobuf_head;
 
-	if (!list_empty(&session_comm->protobuf_head)) {
+	if (!list_empty(session_comm->protobuf_head)) {
 		list_head_t *p, *head;
 
-		head = &session_comm->protobuf_head;
+		head = session_comm->protobuf_head;
 		list_for_each(p, head) {
 			protobuf_node_t *node = list_entry(p, protobuf_node_t, list);
+			assert(node->match_mask);
 			longmask_copy(proto_comm->match_mask[node->engine_id], node->match_mask);
 			if (!init_tag) {
 				init_tag = node->engine_id;
 			}
 		}
-		proto_comm->protobuf_head = session_comm->protobuf_head;
+		
 	} else {
-		LIST_HEAD_INIT(&proto_comm->protobuf_head);
 		for (i=0; i<pconf->total_engine_num; i++) {
 			longmask_all_clr(proto_comm->match_mask[i]);
 		}
 		init_tag = -1;
 	}
-
 	if (info->plugin_num) {
 		module_list_process(info->plugin, info->tag, init_tag, proto_comm);
 	}
-
+	
 	if (proto_comm->app_id != INVALID_PROTO_ID) {
 		packet->app_type = proto_comm->app_id;
 	}
@@ -203,7 +203,7 @@ static int32_t sf_plugin_fini(module_info_t *this)
 		longmask_destroy(info->proto_comm.match_mask[i]);
 	}
 	free(info->proto_comm.match_mask);
-	protobuf_destroy(&info->proto_comm.protobuf_head);
+	protobuf_destroy(info->proto_comm.protobuf_head);
 	free(info);
 	return 0;
 }

@@ -20,7 +20,7 @@ typedef struct proto_comm {
 	packet_t *packet;
 	uint32_t state;
 	longmask_t **match_mask;
-	list_head_t protobuf_head;/*用于跨包匹配的buf*/
+	list_head_t *protobuf_head;/*用于跨包匹配的buf*/
 } proto_comm_t;
 
 static inline protobuf_node_t *protobuf_find(list_head_t *head, uint32_t engine_id)
@@ -42,7 +42,7 @@ static inline int32_t protobuf_setbuf(list_head_t *head, uint32_t engine_id,
 	protobuf_node_t *node;
 	
 	node = protobuf_find(head, engine_id);
-	if (node->buf_len < len) {
+	if (node != NULL && node->buf_len < len) {
 		/*如果buf_len足够，就不必再分配空间*/
 		node = realloc(node, sizeof(protobuf_node_t) + len);
 		if (node == NULL) {
@@ -57,11 +57,11 @@ static inline int32_t protobuf_setbuf(list_head_t *head, uint32_t engine_id,
 			return -NO_SPACE_ERROR;
 		}
 		node->buf_len = len;
+		list_add_tail(&node->list, head);
 	}
 	node->engine_id = engine_id;
 	memcpy(node->buf_data, data, len);
 	
-	list_add_tail(&node->list, head);
 	return 0;
 }
 
@@ -72,17 +72,25 @@ static inline int32_t protobuf_setmask(list_head_t *head, uint32_t engine_id,
 	int32_t i;
 	node = protobuf_find(head, engine_id);
 	if (node == NULL) {
-		return -ITEM_NOT_FOUND;
+		node = zmalloc(protobuf_node_t *, sizeof(protobuf_node_t));
+		if (node == NULL) {
+			return -NO_SPACE_ERROR;
+		} else {
+			list_add_tail(&node->list, head);
+		}
 	}
-	assert(node->match_mask);
+
 	node->match_mask = longmask_create(mask->bit_num);
+	
 	if (node->match_mask == NULL) {
+		list_del(&node->list);
+		free(node);
 		return -NO_SPACE_ERROR;
 	}
 
 	longmask_copy(node->match_mask, mask);
 	
-	for (i=0; i<=app_id; i++) {
+	for (i=0; i<app_id; i++) {
 		longmask_bit_clr(node->match_mask, i);
 	}
 	return 0;

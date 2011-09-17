@@ -11,6 +11,7 @@ LDLUA_METHOD session_saveindex(lua_State* L);
 LDLUA_METHOD session_loadnum(lua_State* L);
 LDLUA_METHOD session_loadstr(lua_State* L);
 LDLUA_METHOD session_gc(lua_State *L);
+LDLUA_METHOD session_state(lua_State *L);
 
 LDLUA_CLASS_DEFINE(session,FAIL_ON_NULL("expired session"),NOP);
 
@@ -20,8 +21,9 @@ static const luaL_reg session_methods[] = {
 	{"savenum", session_savenum},
 	{"savestr", session_savestr},
 	{"saveindex", session_saveindex},
-	{"getnum", session_loadnum},
-	{"getstr", session_loadstr},
+	{"loadnum", session_loadnum},
+	{"loadstr", session_loadstr},
+	{"state", session_state},
     { NULL, NULL },
 };
 
@@ -41,7 +43,7 @@ LDLUA_METHOD session_savenum(lua_State* L)
 	session ss = check_session(L, 1);
 	long num = luaL_optlong(L, LDLUA_OPTARG_NUM_INDEX, 0);
 
-	status = protobuf_setbuf(&ss->protobuf_head, lde_engine_id, sizeof(long), &num);
+	status = protobuf_setbuf(ss->protobuf_head, lde_engine_id, sizeof(long), &num);
 	if (status != 0) {
 		luaL_error(L,"savenum error, status %d\n", status);
 	}
@@ -55,7 +57,7 @@ LDLUA_METHOD session_savestr(lua_State* L)
 	session ss = check_session(L, 1);
 	char *str = (char *)luaL_optstring(L, LDLUA_OPTARG_STR_INDEX, 0);
 
-	status = protobuf_setbuf(&ss->protobuf_head, lde_engine_id, strlen(str), str);
+	status = protobuf_setbuf(ss->protobuf_head, lde_engine_id, strlen(str), str);
 	if (status != 0) {
 		luaL_error(L,"savestr error, status %d\n", status);
 	}
@@ -64,28 +66,49 @@ LDLUA_METHOD session_savestr(lua_State* L)
 
 LDLUA_METHOD session_saveindex(lua_State* L)
 {
-#define LDLUA_OPTARG_PKB_INDEX 2
-#define LDLUA_OPTARG_PKB_LEN 3
+#define LDLUA_OPTARG_SESSION_INDEX 2
+#define LDLUA_OPTARG_SESSION_LEN 3
 	session ss = check_session(L, 1);
-	int index = luaL_optint(L, LDLUA_OPTARG_PKB_INDEX, 0);
-	int len = luaL_optint(L, LDLUA_OPTARG_PKB_LEN, 0);
+	int index = luaL_optint(L, LDLUA_OPTARG_SESSION_INDEX, 0);
+	int len = luaL_optint(L, LDLUA_OPTARG_SESSION_LEN, 0);
 	packet_t *packet;
 	int32_t status;
-	
+	uint32_t app_len = __app_length(ss->packet);
+	lua_Integer n;
+
+	index = __handle_offset(index, len, app_len);
+	if (index < 0) {
+		luaL_error(L,"Range is out of bounds\n");
+		return 0;
+	}
+
 	packet = ss->packet;
 	if ((index + len) >= (int)packet->real_applen) {
 		luaL_error(L,"Range is out of bounds\n");
 		return 0;
 	}
-	status = protobuf_setbuf(&ss->protobuf_head, lde_engine_id, len, &packet->data[index]);
+	n = *(lua_Integer *)(packet->data + packet->app_offset + index);
+	if (len <= 2) {
+		n = ntohs(n);
+	} else {
+		n = ntohl(n);
+	}
+	status = protobuf_setbuf(ss->protobuf_head, lde_engine_id, len, &n);
 	return 0;
+}
+
+LDLUA_METHOD session_state(lua_State* L)
+{
+	session ss = check_session(L, 1);
+	lua_pushnumber(L, ss->state);
+	return 1;
 }
 
 LDLUA_METHOD session_loadnum(lua_State* L)
 {
 	session ss = check_session(L, 1);
 
-	protobuf_node_t *node = protobuf_find(&ss->protobuf_head, lde_engine_id);
+	protobuf_node_t *node = protobuf_find(ss->protobuf_head, lde_engine_id);
 	if (node != NULL) {
 		if (node->buf_data != NULL) {
 			lua_Integer *n = (lua_Integer *)node->buf_data;
@@ -104,7 +127,7 @@ LDLUA_METHOD session_loadstr(lua_State* L)
 {
 	session ss = check_session(L, 1);
 
-	protobuf_node_t *node = protobuf_find(&ss->protobuf_head, lde_engine_id);
+	protobuf_node_t *node = protobuf_find(ss->protobuf_head, lde_engine_id);
 	if (node != NULL) {
 		if (node->buf_data != NULL) {
 			char *n = (char *)node->buf_data;

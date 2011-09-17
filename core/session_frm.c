@@ -173,9 +173,7 @@ static inline uint32_t __post_parsed(hash_table_hd_t *hd, packet_t* packet, sess
 	} else if (comm->state != session->app_state) {
 		/*save status*/
 		session->app_state = comm->state;
-		if (!list_empty(&session->protobuf_head)) {
-			session->protobuf_head = comm->protobuf_head;
-		}
+		/*mask在sf_plugin模块中已经被修改*/
 	}
 	hash_table_unlock(hd, session->index.hash, 0);
 	packet->pktag = next_stage_tag;
@@ -353,12 +351,8 @@ static void* session_frm_result_get(module_info_t *this)
 	
 	assert(info->session);
 	info->proto_buf.state = info->session->app_state;
+	info->proto_buf.protobuf_head = &info->session->protobuf_head;
 
-	if (!list_empty(&info->session->protobuf_head)) {
-		info->proto_buf.protobuf_head = info->session->protobuf_head;
-	} else {
-		LIST_HEAD_INIT(&info->proto_buf.protobuf_head);
-	}
 	return &info->proto_buf;
 }
 

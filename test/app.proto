@@ -4,17 +4,19 @@ engine_list={"pde", "lde"}
 
 qq_file = {}
 qq_file.pde="udp/8000,tcp/8000"
-qq_file.lde = function(buf) 
-			  local state
+qq_file.lde = function(buf, session) 
+			  print("in qq_file")
+			  local state = gstate.init
 			  if (buf:getbyte(0) == 0x02 and buf:getbyte(-1) == 0x03) then
 			      state = gstate.final
 			  end
-			      return state
+			  return state
 			  end
 
 
 ppstream = {}
-ppstream.lde = function(buf)
+ppstream.lde = function(buf, session)
+			   print("in ppstream")
 			  	local state
 				-- ppsteam head length is 4
 				if (buf:len() >= 3) then
@@ -27,20 +29,31 @@ ppstream.lde = function(buf)
 				end
 
 test = {}
-test.lde = function(buf)
-			  	local state
+test.lde = function(buf, session)
+		   	    print("in test")
+			  	local state = session:state()
 				-- ppsteam head length is 4
-				if (buf:len() >= 4) then
-				if (buf:getbyte(0) == 0xfe and buf:getbyte(1) == buf:len()-3 and 
-				    buf(2,2):uintle() == 0) then
-				    state = gstate.final
+				if (state == gstate.init) then
+				    if (buf:len() >= 4) then
+				        if (buf:getbyte(0) == 0xfe and buf:getbyte(1) == buf:len()-3 and 
+				            buf(2,2):uintle() == 0) then
+							session:saveindex(0,4)
+				            state = gstate.s1
+			      	    end
+				     end
+					 return state
 				end
+				if (state == gstate.s1) then
+				   local num = session:loadnum()
+				   print("num = ",num)
+				   state = gstate.final
+				   return state
 				end
 				return state
 				end
 
 nat = {}
-nat.lde = function(buf)
+nat.lde = function(buf, sesison)
 		      local state
 		      if (buf:len() >= 4) then 
 		      if (buf(0,4):uintbe() == 0x00010008) then

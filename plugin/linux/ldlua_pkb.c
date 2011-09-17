@@ -39,25 +39,6 @@ static const luaL_reg pkbrange_meta[] = {
     { NULL, NULL },
 };
 
-static inline uint32_t __app_length(pkb pkt)
-{
-	return pkt->real_applen;
-}
-
-static inline int __handle_offset(int offset, int length, uint32_t app_len)
-{
-	if (offset < 0) {
-		offset = app_len + offset;
-	}
-	
-	if ((offset < 0) || (length < 0) || (offset + length > (int)app_len)) {
-        return -1;
-	} else {
-		return offset;
-	}
-}
-
-
 static pkbrange new_pkbrange(lua_State* L, pkb pkt, int offset, int length) 
 {
 	pkbrange pkbr;
