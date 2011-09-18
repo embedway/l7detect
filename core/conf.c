@@ -132,9 +132,7 @@ int32_t __proto_item_read(lua_State *L, char *proto_name, int index, sf_proto_co
 	assert(p->engine_data);
 	
 	for (i=0; i<conf->total_engine_num; i++) {
-		printf("L=%p, proto_name=%s\n", L, proto_name);
 		type = ldlua_table_item_type(L, proto_name, conf->engines[i].name);
-		printf("type=%d\n", type);
 		if (type <= 0) {
 			p->engine_data[i].lua_type = -1;
 		} else {

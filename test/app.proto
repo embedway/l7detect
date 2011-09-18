@@ -1,7 +1,9 @@
 gstate = {init=0, s1=1, s2=2, s3=3, s4=4, s5=5, s6=6, s7=7, s8=8, final=9}
+--lde引擎是顺序匹配，顺序由proto_list决定
 proto_list={"qq_talk", "ppstream", "qqlive", "http", "dns", "ssl", "nat",	
-			"sametime"}
+			"sametime", "qq_file"}
 engine_list={"pde", "lde"}
+pkb_dir = {up=1, down=2}
 
 qq_talk = {}
 qq_talk.pde="udp/8000,tcp/8000"
@@ -11,6 +13,26 @@ qq_talk.lde = function(buf, session)
 			  if (buf:getbyte(0) == 0x02 and buf:getbyte(-1) == 0x03) then
 			      state = gstate.final
 			  end
+			  end
+			  return state
+			  end
+
+qq_file = {}
+qq_file.lde = function(buf, session) 
+			  local state = session:state()
+			  if (buf:len() >= 2) then
+			  if (state == gstate.init and buf:getbyte(0) == 0x04 and buf:getbyte(-1) == 0x03) then
+				  if (buf:dir() == pkb_dir.up) then
+				  	 session:saveindex(1, 2)
+				  	 state = gstate.s1
+				  end
+				  return state
+			  end
+			  end
+			  if (state == gstate.s1 and buf:dir() == pkb_dir.down) then
+			     if (buf(1,2):uintbe() == session:loadnum()) then
+				 	state = gstate.final
+				 end
 			  end
 			  return state
 			  end
@@ -32,20 +54,18 @@ ppstream.lde = function(buf, session)
 
 qqlive = {}
 qqlive.lde = function(buf, session)
-			  	 local state = session:state()
+			  	 local state = gstate.init
 				 -- ppsteam head length is 4
-				 if (state == gstate.init) then
-				     if (buf:len() >= 4) then
-					     local val1 = buf(2,2):uintle()
-					     local val2 = buf(2,2):uintbe()
-				         if (buf:getbyte(0) == 0xfe and val1 == buf:len()-3 and 
-				             val1 == val2) then
-				             state = gstate.final
-			      	     end
-				     end
-					 return state
-				end
-			end
+				     if (buf:len() >= 5) then
+					 local val1 = buf(1,2):uintle()
+					 local val2 = buf(3,2):uintbe()
+				     if (buf:getbyte(0) == 0xfe and val1 == buf:len()-3 and 
+				         val1 == val2) then
+				         state = gstate.final
+			      	 end
+				 end
+				 return state
+				 end
 
 nat = {}
 nat.lde = function(buf, sesison)

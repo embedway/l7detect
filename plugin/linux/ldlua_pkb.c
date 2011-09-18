@@ -6,6 +6,7 @@
 
 LDLUA_METHOD pkb_index(lua_State* L);
 LDLUA_METHOD pkb_range(lua_State* L);
+LDLUA_METHOD pkb_dir(lua_State* L);
 LDLUA_METHOD pkb_len(lua_State* L);
 LDLUA_METHOD pkb_gc(lua_State *L);
 //LDLUA_METHOD pkb_tostring(lua_State *);
@@ -19,6 +20,7 @@ static const luaL_reg pkb_methods[] = {
     {"range", pkb_range},
     {"len", pkb_len},
 	{"getbyte", pkb_index},
+	{"dir", pkb_dir},
     { NULL, NULL },
 };
 
@@ -111,6 +113,18 @@ LDLUA_METHOD pkb_len(lua_State* L)
 		return 0;
 	}
     lua_pushnumber(L, __app_length(pkt));
+    LDLUA_RETURN(1); /* The length of the pkt. */
+}
+
+LDLUA_METHOD pkb_dir(lua_State* L) 
+{
+	/* Obtain the length of a TVB */
+    pkb pkt = check_pkb(L,1);
+
+    if (!pkt) {
+		return 0;
+	}
+    lua_pushnumber(L, pkt->dir);
     LDLUA_RETURN(1); /* The length of the pkt. */
 }
 
