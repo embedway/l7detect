@@ -29,7 +29,7 @@ $(MADE_WITH):$(USER_CONF)
 $(TARGET) $(OBJS) $(CLEAN_LIST): $(MADE_WITH)
 
 
-application-target: $(TARGET) $(DYNLIB)
+application-target: $(PRE_LIST) $(TARGET) $(DYNLIB)
 
 #$(TARGET).stp: $(TARGET)
 #	$(STRIP) -o $(TARGET).stp $(TARGET)

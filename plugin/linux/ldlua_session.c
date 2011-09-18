@@ -94,6 +94,9 @@ LDLUA_METHOD session_saveindex(lua_State* L)
 		n = ntohl(n);
 	}
 	status = protobuf_setbuf(ss->protobuf_head, lde_engine_id, len, &n);
+	if (status != 0) {
+		luaL_error(L,"session set error, status %d\n", status);
+	}
 	return 0;
 }
 

@@ -113,7 +113,6 @@ static int32_t decap_process(module_info_t *this, void *data)
     dpi_mpls_hdr_t *mpls;
     dpi_ipv4_hdr_t *ipv4;
     dpi_tcp_hdr_t *tcp;
-    dpi_udp_hdr_t *udp;
 	int vlan_layer;
 	int mpls_layer;
 	uint16_t ether_type;
@@ -251,7 +250,6 @@ do_decap_tcp:
 		return 0;
 	}
 do_decap_udp:
-	udp = (dpi_udp_hdr_t *)ptr;
     ptr += sizeof(dpi_udp_hdr_t);
 	packet->app_offset = ptr - start_ptr;
 	packet->real_applen -= sizeof(dpi_udp_hdr_t);

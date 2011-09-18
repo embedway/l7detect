@@ -19,7 +19,7 @@ else
 LIBEVENT := $(LIBEVENT_DIR)/install-dir/lib/libevent_i386.a
 endif
 
-LIBS_LIST   :=  $(LIBS_LIST) $(LIBEVENT)
+#LIBS_LIST   :=  $(LIBS_LIST) $(LIBEVENT)
 PRE_LIST    +=  $(LIBEVENT)
 
 $(LIBEVENT):$(LIBEVENT_DIR)
@@ -42,19 +42,17 @@ else
 LIBLUA := $(LIBLUA_DIR)/lib/liblua_i386.a
 endif
 
-LIBS_LIST   :=  $(LIBS_LIST) $(LIBLUA)
+#LIBS_LIST   :=  $(LIBS_LIST) $(LIBLUA)
 PRE_LIST    +=  $(LIBLUA)
 
 $(LIBLUA):$(LIBLUA_DIR)
-	cd $(LIBLUA_DIR);make generic;make local;cp $(LIBLUA_DIR)/lib/liblua.a $@
+	cd $(LIBLUA_DIR)/src;make all MYCFLAGS=-fPIC;cd ..;make local;cp $(LIBLUA_DIR)/lib/liblua.a $@
 
 $(LIBLUA_DIR):
 	mkdir -p $(THIRD_BUILD_DIR)
 	tar -C $(THIRD_BUILD_DIR) -xzvf $(TOP)/lib/third/source/lua-5.1.4.tar.gz
 
 ##########################end libevent make##################################
-
-
 
 #  standard component Makefile footer
 

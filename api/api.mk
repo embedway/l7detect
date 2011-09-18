@@ -15,7 +15,7 @@ API_OBJS += $(OBJ_DIR)/helper.o
 
 OBJS_$(d)  :=  $(API_OBJS)
 
-API_CFLAGS_LOCAL := -I$(d) -I$(TOP)/api
+API_CFLAGS_LOCAL := -I$(d) -I$(TOP)/api -fPIC
 
 $(OBJS_$(d)):  CFLAGS_LOCAL := $(API_CFLAGS_LOCAL)
 

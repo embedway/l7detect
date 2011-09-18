@@ -69,7 +69,7 @@ typedef struct {
 	uint8_t tos;
 	uint16_t length;
 	uint16_t id;
-	u_short offset;
+	uint16_t offset;
 #define IP_RF 0x8000            /* reserved fragment flag */
 #define IP_DF 0x4000            /* dont fragment flag */
 #define IP_MF 0x2000            /* more fragments flag */

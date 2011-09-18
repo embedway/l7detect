@@ -45,6 +45,8 @@ CLEAN_LIST += $(GEN_C_FILES)
 
 all_targets:$(DYNLIB_DIR)
 	for t in $(DYN_LIBS_LIST); do $(MAKE) DYNLIB=$$t application-target|| exit -1;done	
+zip:
+	git archive --format=zip --prefix=l7detect/ HEAD > l7detect.zip
 
 clean:
 	rm -f $(TARGET) 

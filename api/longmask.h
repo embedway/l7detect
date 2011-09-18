@@ -36,7 +36,7 @@ static inline void longmask_copy(longmask_t *dst, longmask_t *src)
 
 	assert(dst->bit_num == src->bit_num);
 	bytes = (src->bit_num + 7) / 8;
-	memcpy(dst, src, sizeof(longmask_t));
+	memcpy(dst, src, sizeof(longmask_t) + bytes);
 }
 
 static inline int32_t longmask_bit1_find(longmask_t *mask, uint32_t start_bit)

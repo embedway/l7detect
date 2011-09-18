@@ -15,7 +15,7 @@
     do { typeof(a) __tmp = (a); (a) = (b); (b) = __tmp; } while (0)
 
 #ifndef offsetof
-#define offsetof(type, member) ( (int) & ((type*)0) -> member )
+#define offsetof(type, member) ( (unsigned long) & ((type*)0) -> member )
 #endif
 
 #define container_of(ptr, type, member) ({                      \

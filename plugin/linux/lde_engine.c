@@ -134,7 +134,6 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 	lde_engine_info_t *info;
 	sf_proto_conf_t *conf;
 	longmask_t *mask;
-	lua_State *L;
 	uint32_t tag = 0;
 	int32_t app_id, status;
 	int32_t state = 0;
@@ -143,7 +142,6 @@ static int32_t lde_engine_process(module_info_t *this, void *data)
 	packet = proto_comm->packet;
 	info = (lde_engine_info_t *)this->resource;
 	conf = info->conf;
-	L = info->lua_v;
 
 	info->packet = packet;
 	info->proto_comm = proto_comm;
