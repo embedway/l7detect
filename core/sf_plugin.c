@@ -141,7 +141,6 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 	proto_comm->app_id = INVALID_PROTO_ID;
 	proto_comm->state = session_comm->state;
 	proto_comm->protobuf_head = session_comm->protobuf_head;
-
 	if (!list_empty(session_comm->protobuf_head)) {
 		list_head_t *p, *head;
 
@@ -203,8 +202,8 @@ static int32_t sf_plugin_fini(module_info_t *this)
 		longmask_destroy(info->proto_comm.match_mask[i]);
 	}
 	free(info->proto_comm.match_mask);
-	protobuf_destroy(info->proto_comm.protobuf_head);
 	free(info);
+
 	return 0;
 }
 

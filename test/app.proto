@@ -1,53 +1,51 @@
 gstate = {init=0, s1=1, s2=2, s3=3, s4=4, s5=5, s6=6, s7=7, s8=8, final=9}
-proto_list={"qq_file", "ppstream", "test", "http", "dns", "ssl", "nat"}
+proto_list={"qq_talk", "ppstream", "qqlive", "http", "dns", "ssl", "nat",	
+			"sametime"}
 engine_list={"pde", "lde"}
 
-qq_file = {}
-qq_file.pde="udp/8000,tcp/8000"
-qq_file.lde = function(buf, session) 
+qq_talk = {}
+qq_talk.pde="udp/8000,tcp/8000"
+qq_talk.lde = function(buf, session) 
 			  local state = gstate.init
+			  if (buf:len() >= 2) then
 			  if (buf:getbyte(0) == 0x02 and buf:getbyte(-1) == 0x03) then
 			      state = gstate.final
+			  end
 			  end
 			  return state
 			  end
 
-
 ppstream = {}
 ppstream.lde = function(buf, session)
-			  	local state
-				-- ppsteam head length is 4
-				if (buf:len() >= 3) then
-				if (buf:getbyte(2) == 0x43 and buf:getbyte(3) == 0 and 
-				    buf(0,2):uintle() == buf:len()-4) then
-				    state = gstate.final
-				end
-				end
-				return state
-				end
+			   local state
+			   local len = buf:len()
+			   -- ppstream head length is 4
+			   if (len >= 4) then
+			   	   local buf_hd = buf(0,2):uintle()
+				   if (buf:getbyte(2) == 0x43 and buf:getbyte(3) == 0 and 
+				   	   (buf_hd == len or buf_hd == (len-4))) then
+				       state = gstate.final
+				   end
+			   end
+			   return state
+			   end
 
-test = {}
-test.lde = function(buf, session)
-			  	local state = session:state()
-				-- ppsteam head length is 4
-				if (state == gstate.init) then
-				    if (buf:len() >= 4) then
-				        if (buf:getbyte(0) == 0xfe and buf:getbyte(1) == buf:len()-3 and 
-				            buf(2,2):uintle() == 0) then
-							session:saveindex(0,4)
-				            state = gstate.s1
-			      	    end
+qqlive = {}
+qqlive.lde = function(buf, session)
+			  	 local state = session:state()
+				 -- ppsteam head length is 4
+				 if (state == gstate.init) then
+				     if (buf:len() >= 4) then
+					     local val1 = buf(2,2):uintle()
+					     local val2 = buf(2,2):uintbe()
+				         if (buf:getbyte(0) == 0xfe and val1 == buf:len()-3 and 
+				             val1 == val2) then
+				             state = gstate.final
+			      	     end
 				     end
 					 return state
 				end
-				if (state == gstate.s1) then
-				   local num = session:loadnum()
-				   --print("num = ",num)
-				   state = gstate.final
-				   return state
-				end
-				return state
-				end
+			end
 
 nat = {}
 nat.lde = function(buf, sesison)
@@ -69,7 +67,8 @@ dns.pde = "udp/53"
 ssl = {}
 ssl.pde = "tcp/443"
 
-
+sametime = {}
+sametime.pde = "tcp/1533"
 
 --[[for k, v in pairs(qq_chat)
 do

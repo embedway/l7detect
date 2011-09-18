@@ -140,10 +140,14 @@ static inline int32_t __is_interal_ip(uint32_t ip)
 static inline int32_t __session_index_dir(session_index_t *index)
 {
 	int32_t dir;
+	int32_t internal_ip0, internal_ip1;
 
-	if (__is_interal_ip(index->ip[0])) {
+	internal_ip0 = __is_interal_ip(index->ip[0]);
+	internal_ip1 = __is_interal_ip(index->ip[1]);
+
+	if (internal_ip0 && !internal_ip1) {
 		dir = PKT_DIR_UPSTREAM;
-	} else if (__is_interal_ip(index->ip[1])) {
+	} else if (internal_ip1 && !internal_ip0) {
 		dir = PKT_DIR_DNSTREAM;
 	} else if (index->port[0] < index->port[1]) {
 		dir = PKT_DIR_DNSTREAM;
@@ -331,7 +335,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	__update_session_count(session, packet);
 	hash_table_unlock(hd, hash, 0);
-	if ((packet->real_applen == 0) || (session->app_type != INVALID_PROTO_ID)) {
+	if ((session->app_type != INVALID_PROTO_ID)) {
 		/*app length is 0*/
 		return next_stage_tag;
 	} else {
@@ -449,6 +453,7 @@ static void __session_table_clear(hash_table_hd_t *session_table)
 				if (status != 0) {
 					log_error(syslog_p, "remove item error, status %d\n", status);
 				}
+				protobuf_destroy(&item->protobuf_head);
 				free(item);
 			}
 		}
