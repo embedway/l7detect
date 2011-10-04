@@ -12,11 +12,11 @@ English:
 
 1. l7detect is a flow-based architecture of network application analysis;
 2. Two simple engine was provied by l7detect, port base pde engine and lua based lde engine. All engines was designed as a plugin, so it is allowed to develop a new engine by yourself to add to l7detect;
-3. lua config can be extended to support protocols you need. Although lde is a simple engine, she owns extensible characteristic, such as: multiple packet match, state machine. It's encouraged to enhance all protocol engines by you;
+3. lua config can be extended to support protocols you need. Although lde is a simple engine, she owns extensible characteristic, such as: multiple packet match, state machine. You are encouraged to enhance all protocol engines;
 4. It's welcomed to develop l7detect framework and protocol detect engines, my email address is windslinux@gmail.com;
 5. l7detect will slove most popular application protocols in China, other protocol is supported by someone who interested in it. Protocol signature is stored in test/app.proto file;
-6. l7detect is a long-term project, 
-7. Thanks to a lot of open source project such as emacs，gcc, Makefile, git，lua，wireshark. Without the help of these project, I have nothing to do;
+6. l7detect is a long-term project;
+7. Thanks to a lot of open source project such as emacs，gcc, Makefile, git，lua，wireshark. Without the help of these project, I can do nothing;
 8. l7detect was compiled and run in Fedore core 5, with gcc and Gnu make. If you have any problems, contact me with Email:windslinux@gmail.com;
 
 
