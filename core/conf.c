@@ -73,7 +73,7 @@ uint32_t __read_file(char *filename, char **rd_buf, int init_size, int step)
 	char buf[READ_BUF_SIZE];
 	FILE *fp;
 	int fd;
-	char *p, *head, *tmp;
+	char *p, *head;
 	uint32_t total_size, count, read_size;
 
 	assert(filename);
@@ -87,27 +87,31 @@ uint32_t __read_file(char *filename, char **rd_buf, int init_size, int step)
 	fd = fileno(fp);
 
 	p = malloc(init_size);
+    if (p == NULL) {
+        print("malloc error !\n");
+        return 0;
+    }
+
 	head = p;
 	read_size = 0;
-
 	total_size = init_size;
-
 	while ((count = read(fd, buf, READ_BUF_SIZE)) != 0) {
-		if ((p + count) > (head + total_size)) {
-			tmp = p;
+        if ((p + count) > (head + total_size)) {
 			if ((p+count) > (head + total_size) + step) {
 				step = p + count - (head+total_size);
 			}
 			p = realloc(head, total_size + step);
-			if (p != NULL) {
+            if (p != NULL) {
+                head = p;
 				total_size += step;
-				p = tmp;
+				p += read_size;
 			} else {
+                print("realloc failed");
 				return 0;
 			}
 		}
 		memcpy(p, buf, count);
-		p += count;
+        p += count;
 		read_size += count;
 	}
 	fclose(fp);
@@ -122,15 +126,15 @@ int32_t __proto_item_read(lua_State *L, char *proto_name, int index, sf_proto_co
 	proto_conf_t *p;
 
 	p = &conf->protos[index];
-	
+
 	assert(conf->engines);
 	p->name = malloc(strlen(proto_name) + 1);
 	assert(p->name);
 	strcpy(p->name, proto_name);
-	
+
 	p->engine_data = zmalloc(proto_engine_data_t *, sizeof(proto_engine_data_t) * conf->total_engine_num);
 	assert(p->engine_data);
-	
+
 	for (i=0; i<conf->total_engine_num; i++) {
 		type = ldlua_table_item_type(L, proto_name, conf->engines[i].name);
 		if (type <= 0) {
@@ -175,7 +179,7 @@ sf_proto_conf_t *__proto_conf_read()
 		assert(L);
 		luaL_openlibs(L);
 		luaL_loadbuffer(L, sf_conf->app_luabuf, read_size, "app_parser");
-		error = lua_pcall(L, 0, 0, 0);
+        error = lua_pcall(L, 0, 0, 0);
 		if (error) {
 			err_print("%s\n", lua_tostring(L, -1));
 			lua_pop(L, 1);
@@ -193,7 +197,7 @@ sf_proto_conf_t *__proto_conf_read()
 
 	sf_conf->engines = zmalloc(detect_engine_t *, total_engine_num * sizeof(detect_engine_t));
 	assert(sf_conf->engines);
-	
+
 	for (i=1; i<=total_engine_num; i++) {
 		char *p;
 		p = ldlua_table_raw_get_string(L, ENGINE_LIST_NAME, i);
@@ -212,7 +216,7 @@ sf_proto_conf_t *__proto_conf_read()
 		if (proto_name) {
 			__proto_item_read(L, proto_name, i-1, sf_conf);
 		} else {
-			err_print("item %d type error, %s\n", 
+			err_print("item %d type error, %s\n",
 					  i, lua_typename(L, lua_type(L, -1)));
 		}
 	}
@@ -226,18 +230,18 @@ sf_proto_conf_t *__proto_conf_read()
 void __proto_conf_show(sf_proto_conf_t *conf)
 {
 	uint32_t i, j;
-	
+
 	print("total_engine_num=%d, list:\n", conf->total_engine_num);
 	for (i=0; i<conf->total_engine_num; i++) {
 		print("\t%s\n", conf->engines[i].name);
 	}
-	
+
 	print("total_proto_num=%d\n", conf->total_proto_num);
 	for (i=0; i<conf->total_proto_num; i++) {
 		print("\tname:%s,engine_mask:%d\n", conf->protos[i].name, conf->protos[i].engine_mask);
 		for (j=0; j<conf->total_engine_num; j++) {
-			print("\t\tengine:%s, type:%d, data:%s\n", conf->engines[j].name, 
-				  conf->protos[i].engine_data[j].lua_type, 
+			print("\t\tengine:%s, type:%d, data:%s\n", conf->engines[j].name,
+				  conf->protos[i].engine_data[j].lua_type,
 				  (conf->protos[i].engine_data[j].data == NULL)?"NULL":(char *)conf->protos[i].engine_data[j].data);
 		}
 	}
@@ -272,7 +276,7 @@ void __proto_conf_free(void *data)
 		}
 		free(conf->protos);
 	}
-	
+
 	free(conf);
 }
 
@@ -302,7 +306,7 @@ int32_t conf_read(int argc, char *argv[])
 	return 0;
 }
 
-static inline int32_t __conf_insert(list_head_t *head, char *name, void *data, 
+static inline int32_t __conf_insert(list_head_t *head, char *name, void *data,
 									conf_node_free_callback free_cb)
 {
 	conf_node_t *node;
