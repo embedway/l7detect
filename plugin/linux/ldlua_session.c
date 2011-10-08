@@ -93,7 +93,7 @@ LDLUA_METHOD session_saveindex(lua_State* L)
 	} else {
 		n = ntohl(n);
 	}
-	status = protobuf_setbuf(ss->protobuf_head, lde_engine_id, len, &n);
+	status = protobuf_setbuf(ss->protobuf_head, lde_engine_id, sizeof(lua_Integer), &n);
 	if (status != 0) {
 		luaL_error(L,"session set error, status %d\n", status);
 	}
@@ -115,7 +115,7 @@ LDLUA_METHOD session_loadnum(lua_State* L)
 	if (node != NULL) {
 		if (node->buf_data != NULL) {
 			lua_Integer *n = (lua_Integer *)node->buf_data;
-			lua_pushinteger(L, *n);
+            lua_pushinteger(L, *n);
 			return 1;
 		} else {
 			luaL_error(L,"session data not buffered\n");
@@ -150,10 +150,10 @@ LDLUA_METHOD session_gc(lua_State *L)
 	return 0;
 }
 
-int session_register(lua_State* L) 
+int session_register(lua_State* L)
 {
 	LDLUA_REGISTER_CLASS(session);
-	
+
     return 0;
 }
 

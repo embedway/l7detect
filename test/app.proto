@@ -1,13 +1,13 @@
 gstate = {init=0, s1=1, s2=2, s3=3, s4=4, s5=5, s6=6, s7=7, s8=8, final=9}
 --lde引擎是顺序匹配，顺序由proto_list决定
-proto_list={"qq_talk", "ppstream", "qqlive", "http", "dns", "ssl", "nat",	
+proto_list={"qq_talk", "ppstream", "qqlive", "http", "dns", "ssl", "nat",
 			"sametime", "qq_file"}
 engine_list={"pde", "lde"}
 pkb_dir = {up=1, down=2}
 
 qq_talk = {}
-qq_talk.pde="udp/8000,tcp/8000"
-qq_talk.lde = function(buf, session) 
+qq_talk.pde="udp/8000,tcp/8000,tcp/14000"
+qq_talk.lde = function(buf, session)
 			  local state = gstate.init
 			  if (buf:len() >= 2) then
 			  if (buf:getbyte(0) == 0x02 and buf:getbyte(-1) == 0x03) then
@@ -18,7 +18,7 @@ qq_talk.lde = function(buf, session)
 			  end
 
 qq_file = {}
-qq_file.lde = function(buf, session) 
+qq_file.lde = function(buf, session)
 			  local state = session:state()
 			  if (buf:len() >= 2) then
 			  if (state == gstate.init and buf:getbyte(0) == 0x04 and buf:getbyte(-1) == 0x03) then
@@ -29,6 +29,7 @@ qq_file.lde = function(buf, session)
 				  return state
 			  end
 			  end
+
 			  if (state == gstate.s1 and buf:dir() == pkb_dir.down) then
 			     if (buf(1,2):uintbe() == session:loadnum()) then
 				 	state = gstate.final
@@ -44,7 +45,7 @@ ppstream.lde = function(buf, session)
 			   -- ppstream head length is 4
 			   if (len >= 4) then
 			   	   local buf_hd = buf(0,2):uintle()
-				   if (buf:getbyte(2) == 0x43 and buf:getbyte(3) == 0 and 
+				   if (buf:getbyte(2) == 0x43 and buf:getbyte(3) == 0 and
 				   	   (buf_hd == len or buf_hd == (len-4))) then
 				       state = gstate.final
 				   end
@@ -59,7 +60,7 @@ qqlive.lde = function(buf, session)
 				     if (buf:len() >= 5) then
 					 local val1 = buf(1,2):uintle()
 					 local val2 = buf(3,2):uintbe()
-				     if (buf:getbyte(0) == 0xfe and val1 == buf:len()-3 and 
+				     if (buf:getbyte(0) == 0xfe and val1 == buf:len()-3 and
 				         val1 == val2) then
 				         state = gstate.final
 			      	 end
@@ -70,7 +71,7 @@ qqlive.lde = function(buf, session)
 nat = {}
 nat.lde = function(buf, sesison)
 		      local state
-		      if (buf:len() >= 4) then 
+		      if (buf:len() >= 4) then
 		      if (buf(0,4):uintbe() == 0x00010008) then
 		          state = gstate.final
 		      end

@@ -13,6 +13,7 @@ LDLUA_METHOD pkb_gc(lua_State *L);
 LDLUA_METHOD pkbrange_uintbe(lua_State* L);
 LDLUA_METHOD pkbrange_uintle(lua_State* L);
 LDLUA_METHOD pkbrange_gc(lua_State *L);
+LDLUA_METHOD pkb_debug(lua_State *L);
 LDLUA_CLASS_DEFINE(pkb,FAIL_ON_NULL("expired pkb"),NOP);
 LDLUA_CLASS_DEFINE(pkbrange,FAIL_ON_NULL("expired pkbrange"),NOP);
 
@@ -21,6 +22,7 @@ static const luaL_reg pkb_methods[] = {
     {"len", pkb_len},
 	{"getbyte", pkb_index},
 	{"dir", pkb_dir},
+    {"debug", pkb_debug},
     { NULL, NULL },
 };
 
@@ -41,7 +43,7 @@ static const luaL_reg pkbrange_meta[] = {
     { NULL, NULL },
 };
 
-static pkbrange new_pkbrange(lua_State* L, pkb pkt, int offset, int length) 
+static pkbrange new_pkbrange(lua_State* L, pkb pkt, int offset, int length)
 {
 	pkbrange pkbr;
 	uint32_t app_len = __app_length(pkt);
@@ -83,12 +85,12 @@ LDLUA_METHOD pkb_index(lua_State* L)
 	return 1;
 }
 
-LDLUA_METHOD pkb_range(lua_State* L) 
+LDLUA_METHOD pkb_range(lua_State* L)
 {
 	/* Creates a pkbr from this pkb. This is used also as the pkb:__call() metamethod. */
 #define LDLUA_OPTARG_PKB_RANGE_OFFSET 2 /* The offset (in octets) from the begining of the pkb. Defaults to 0. */
 #define LDLUA_OPTARG_PKB_RANGE_LENGTH 3 /* The length (in octets) of the range. Defaults to until the end of the pkb. */
-	
+
     pkb pkt = check_pkb(L,1);
     int offset = luaL_optint(L,LDLUA_OPTARG_PKB_RANGE_OFFSET,0);
     int len = luaL_optint(L,LDLUA_OPTARG_PKB_RANGE_LENGTH,-1);
@@ -104,7 +106,7 @@ LDLUA_METHOD pkb_range(lua_State* L)
     return 0;
 }
 
-LDLUA_METHOD pkb_len(lua_State* L) 
+LDLUA_METHOD pkb_len(lua_State* L)
 {
 	/* Obtain the length of a TVB */
     pkb pkt = check_pkb(L,1);
@@ -116,7 +118,7 @@ LDLUA_METHOD pkb_len(lua_State* L)
     LDLUA_RETURN(1); /* The length of the pkt. */
 }
 
-LDLUA_METHOD pkb_dir(lua_State* L) 
+LDLUA_METHOD pkb_dir(lua_State* L)
 {
 	/* Obtain the length of a TVB */
     pkb pkt = check_pkb(L,1);
@@ -125,6 +127,21 @@ LDLUA_METHOD pkb_dir(lua_State* L)
 		return 0;
 	}
     lua_pushnumber(L, pkt->dir);
+    LDLUA_RETURN(1); /* The length of the pkt. */
+}
+
+LDLUA_METHOD pkb_debug(lua_State* L)
+{
+    pkb pkt = check_pkb(L,1);
+
+    if (!pkt) {
+		return 0;
+	}
+    if (pkt->flag & PKT_DEBUG) {
+        lua_pushboolean(L, 1);
+    } else {
+        lua_pushboolean(L, 0);
+    }
     LDLUA_RETURN(1); /* The length of the pkt. */
 }
 
@@ -146,7 +163,7 @@ LDLUA_METHOD pkbrange_uintbe(lua_State* L)
 	packet = pkbr->pkt;
 	offset = pkbr->offset;
 	app_data = packet->data + packet->app_offset;
-	switch (pkbr->length) 
+	switch (pkbr->length)
 	{
 	case 1:
 		lua_pushnumber(L, *(uint8_t *)(app_data + offset));
@@ -177,7 +194,7 @@ LDLUA_METHOD pkbrange_uintle(lua_State* L)
 	packet = pkbr->pkt;
 	offset = pkbr->offset;
 	app_data = packet->data + packet->app_offset;
-	switch (pkbr->length) 
+	switch (pkbr->length)
 	{
 	case 1:
 		lua_pushnumber(L, *(uint8_t *)(app_data + offset));
@@ -202,13 +219,13 @@ LDLUA_METHOD pkbrange_gc(lua_State *L)
 	return 0;
 }
 
-int pkb_register(lua_State* L) 
+int pkb_register(lua_State* L)
 {
 	LDLUA_REGISTER_CLASS(pkb);
     return 0;
 }
 
-int pkbrange_register(lua_State* L) 
+int pkbrange_register(lua_State* L)
 {
 	LDLUA_REGISTER_CLASS(pkbrange);
     return 0;

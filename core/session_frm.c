@@ -33,7 +33,7 @@ static uint16_t sf_plugin_tag;
 static uint16_t parsed_tag;
 static uint16_t next_stage_tag; /*未来扩展使用*/
 
-module_ops_t session_frm_ops = {					
+module_ops_t session_frm_ops = {
 	.init = session_frm_init,
 	.start = NULL,
 	.process = session_frm_process,
@@ -58,7 +58,7 @@ typedef struct session_index {
 	uint32_t ip[2];
 	uint16_t port[2];
 	uint32_t protocol:8;
-	uint32_t hash:24;	
+	uint32_t hash:24;
 } session_index_t;
 
 typedef struct session_item {
@@ -88,7 +88,7 @@ typedef struct session_frm_info {
 	session_conf_t *conf;
 	sf_proto_conf_t *sf_conf;
 	log_t *log_c;
-	session_item_t *session;	    /**< 流表中找到的表项*/	
+	session_item_t *session;	    /**< 流表中找到的表项*/
 	session_index_t index_cache;	/**< 临时的session cache，减小每次进入函数堆栈分配的开销 */
 	hash_func hash_cb;
 	session_frm_stats_t stats;
@@ -124,13 +124,13 @@ void __update_session_count(session_item_t *session, packet_t *packet)
 	} else if (dir == PKT_DIR_DNSTREAM) {
 		session->flow[FLOW_DN_STREAM_INDEX].pkts++;
 		session->flow[FLOW_DN_STREAM_INDEX].bytes += packet->len;
-	} 
+	}
 }
 
 static inline int32_t __is_interal_ip(uint32_t ip)
 {
 	if (((ip & 0xff000000) == 0xa000000) || ((ip & 0xffff0000) == 0xc0a80000) ||
-		((ip >= 0xaca00000) && (ip <= 0xac1f0000))) {
+		((ip >= 0xac100000) && (ip <= 0xac1f0000))) {
 		return 1;
 	} else {
 		return 0;
@@ -157,7 +157,7 @@ static inline int32_t __session_index_dir(session_index_t *index)
 	return dir;
 }
 
-static inline void __init_session(session_item_t *session, session_index_t *index, packet_t *packet)		
+static inline void __init_session(session_item_t *session, session_index_t *index, packet_t *packet)
 {
 	memset(session, 0, sizeof(session_item_t));
 	memcpy(&session->index, index, sizeof(session_index_t));
@@ -213,7 +213,7 @@ static int32_t session_frm_init(module_info_t *this)
 	info = zmalloc(session_frm_info *, sizeof(session_frm_info));
 	assert(info);
 	this->resource = info;
-	
+
 	conf = (session_conf_t *)conf_module_config_search("session", NULL);
 	assert(conf);
 
@@ -221,14 +221,14 @@ static int32_t session_frm_init(module_info_t *this)
 	assert(sf_conf);
 
 	info->session_table = hash_table_init(conf->bucket_num, SPINLOCK);
-	assert(info->session_table);	
-	
+	assert(info->session_table);
+
 	info->log_c = log_init(conf->session_logname, DEBUG);
 	assert(info->log_c);
 
 	info->conf = conf;
 	info->sf_conf = sf_conf;
-	
+
 	for(i=0; i<sizeof(hash_map)/sizeof(hash_map[0]); i++) {
 		if (strcmp(hash_map[i].name, conf->hash_name) == 0) {
 			info->hash_cb = hash_map[i].hash_cb;
@@ -255,7 +255,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	uint8_t swap_flag = 0;
 	int32_t status;
 	proto_comm_t *comm = NULL;
-	
+
 	stats = &info->stats;
 	buf = &info->index_cache;
 	session = info->session;
@@ -263,13 +263,13 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	if ((info->packet != NULL) && info->packet != data) {
 		comm = (proto_comm_t *)data;
-		
+
 		packet = comm->packet;
 		assert(packet == info->packet);
 	} else {
 		packet = (packet_t *)data;
 	}
-	
+
 	info->packet = packet;
 
 	if (packet->pktag == parsed_tag) {
@@ -281,7 +281,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 		return -UNKNOWN_PKT;
 	} else {
 		uint8_t last_prot = packet->prot_types[packet->prot_depth-1];
-		if ((last_prot != DPI_PROT_TCP) && (last_prot != DPI_PROT_UDP) && 
+		if ((last_prot != DPI_PROT_TCP) && (last_prot != DPI_PROT_UDP) &&
 			(last_prot != DPI_PROT_ICMP)) {
 			return -UNKNOWN_PKT;
 		}
@@ -299,6 +299,9 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 		swap(buf->port[0], buf->port[1]);
 		swap_flag = 1;
 	}
+    if (buf->ip[0] == 0xac11341B || buf->ip[1] == 0xac11341B) {
+        packet->flag |= PKT_DEBUG;
+    }
 
 	hash = info->hash_cb(buf);
 	hash = hash % hd->bucket_num;
@@ -306,7 +309,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	hash_table_lock(hd, hash, 0);
 	session = hash_table_search(hd, hash, NULL, session_compare, buf, NULL);
-	
+
 	if (session == NULL) {
 		/*新建流*/
 		session = (session_item_t *)malloc(sizeof(session_item_t));
@@ -314,7 +317,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 			log_error(syslog_p, "new session no space now\n");
 			goto failed;
 		}
-		
+
 		__init_session(session, buf, packet);
 		INC_CNT(stats->session_count);
 		session->index.hash = hash;
@@ -323,7 +326,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 			log_error(syslog_p, "new session insert error, status=%d\n", status);
 			goto failed;
 		}
-	} 
+	}
 	info->session = session;
 
 	if (swap_flag) {
@@ -352,7 +355,7 @@ static void* session_frm_result_get(module_info_t *this)
 {
 	session_frm_info *info = this->resource;
 	info->proto_buf.packet = info->packet;
-	
+
 	assert(info->session);
 	info->proto_buf.state = info->session->app_state;
 	info->proto_buf.protobuf_head = &info->session->protobuf_head;
@@ -394,7 +397,7 @@ static void session_item_show(session_frm_info *info)
 	uint16_t port0, port1;
 	uint32_t bucket, max_bucket = 0;
 	sf_proto_conf_t *sf_conf = info->sf_conf;
-	
+
 	log_notice(syslog_p, "\n-----------------sessioninfo---------------\n");
     log_notice(syslog_p, "unknown_pkts=%llu\n", stats->unknown_pkts);
     log_notice(syslog_p, "unknown_dir=%llu\n", stats->unknown_dir);
@@ -413,22 +416,22 @@ static void session_item_show(session_frm_info *info)
 			port0 = item->index.port[0];
 			port1 = item->index.port[1];
 			bucket++;
-			
+
 			if (item->dir == SESSION_INDEX_DNSTREAM) {
 				/*如果索引是下行的，交换一下ip和端口来展示*/
 				swap(ip0_int, ip1_int);
 				swap(port0, port1);
 			}
 			/*源ip，源端口，目的ip, 目的端口，协议类型，上行包数，下行包数，上行字节数，下行字节数*/
-			log_print(info->log_c, "%s,%d,%s,%d,%s,%d,%d,%d,%d,%s\n", 
-					   inet_ntop(AF_INET, &ip0_int, ip0, sizeof(ip0)), 
+			log_print(info->log_c, "%s,%d,%s,%d,%s,%d,%d,%d,%d,%s\n",
+					   inet_ntop(AF_INET, &ip0_int, ip0, sizeof(ip0)),
 					   port0,
-					   inet_ntop(AF_INET, &ip1_int, ip1, sizeof(ip1)), 
+					   inet_ntop(AF_INET, &ip1_int, ip1, sizeof(ip1)),
 					   port1,
 					   __get_ip_protocol_name(item->index.protocol),
 					  item->flow[0].pkts, item->flow[1].pkts,
 					  item->flow[0].bytes, item->flow[1].bytes,
-					  (item->app_type != INVALID_PROTO_ID) ? 
+					  (item->app_type != INVALID_PROTO_ID) ?
 					  sf_conf->protos[item->app_type].name:"Unknown");
 		}
 		hash_table_unlock(session_table, i, 0);
