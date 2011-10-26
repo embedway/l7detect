@@ -21,11 +21,13 @@ static int32_t recv_init(module_info_t *this)
 {
 	int32_t rv = 0;
 	extern module_ops_t pcap_read_ops;
-	
+	extern module_ops_t pcap_live_ops;
+
 	switch (g_conf.mode) {
 	case MODE_LIVE:
 		/*暂时还不支持*/
-		rv = -INVALID_PARAM;
+        memcpy(&recv_mod_ops, &pcap_live_ops, sizeof(pcap_live_ops));
+        rv = recv_mod_ops.init(this);
 		break;
 	case MODE_FILE:
 		memcpy(&recv_mod_ops, &pcap_read_ops, sizeof(module_ops_t));

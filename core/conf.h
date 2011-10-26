@@ -58,6 +58,7 @@ typedef struct conf {
 		char *device;
 		char *capfile;
 	} u;
+    uint32_t thread_num;
 	char *logfile;
 	char *protofile;
 	list_head_t module_conf_head;

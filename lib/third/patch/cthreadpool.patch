@@ -1,0 +1,26 @@
+diff -crN cthreadpool/Makefile cthreadpool.new/Makefile
+*** cthreadpool/Makefile	1970-01-01 08:00:00.000000000 +0800
+--- cthreadpool.new/Makefile	2011-10-19 10:45:12.011502430 +0800
+***************
+*** 0 ****
+--- 1,20 ----
++ CC=$(CROSSPLAT)gcc
++ AR=$(CROSSPLAT)ar
++ CFLAGS=-Wall -O2
++ LDFLAGS=
++ TARGET=libcthreadpool.a
++ OBJS=threadpool.o
++ COMPILE  =  $(CC) $(CFLAGS) -MD -c -o $@ $<
++ 
++ ALL:$(TARGET)
++ 
++ $(TARGET):$(OBJS)
++ 	$(AR) -cr $@ $^
++ 
++ %.o:%.c
++ 	$(COMPILE)
++ 
++ -include $(OBJS:.o=.d)
++ 
++ clean:
++ 		rm -f $(OBJS) *~ *.d $(TARGET)

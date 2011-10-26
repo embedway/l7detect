@@ -37,6 +37,7 @@ static void __usage(char *prog_name)
 static void __init_default_config()
 {
 	g_conf.protofile = DEFAULT_PROTOFILE_PATH;
+    g_conf.thread_num = 1;
 }
 
 static int __parse_args(int argc, char *argv[])
@@ -58,6 +59,9 @@ static int __parse_args(int argc, char *argv[])
 		case 'p':
 			g_conf.protofile = optarg;
 			break;
+        case 'n':
+            g_conf.thread_num = atoi(optarg);
+            break;
 		case 'h':
 		default:
 			__usage(argv[0]);

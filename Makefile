@@ -2,7 +2,7 @@ TOP:=${PWD}
 
 LDFLAGS_GLOBAL=
 
-#.PHONY: head_links clean back update version tags cstags 
+#.PHONY: head_links clean back update version tags cstags
 #  standard common Makefile fragment
 all: all_targets
 
@@ -28,15 +28,15 @@ include $(dir)/api.mk
 dir:=$(TOP)/plugin
 include $(dir)/plugin.mk
 
-TARGET = l7detect$(PREFIX) 
+TARGET = l7detect$(PREFIX)
 
-LIBS_LIST := $(LIBS_LIST) $($(TARGET)-LIBS) 
+LIBS_LIST := $(LIBS_LIST) $($(TARGET)-LIBS)
 
-CFLAGS_LOCAL = -g -O2 -W -Wall -Wno-unused-parameter  
+CFLAGS_LOCAL = -g -O2 -W -Wall -Wno-unused-parameter
 CFLAGS_LOCAL += $($(TARGET)-FLAGS)
 
 CFLAGS_GLOBAL += -I$(TOP)/include -I$(LIBLUA_DIR)/include
-LDFLAGS_GLOBAL += -lpthread -lpcap -ldl -lm -L$(LIBLUA_DIR)/lib -llua
+LDFLAGS_GLOBAL += -lpthread -lpcap -ldl -lm -L$(LIBLUA_DIR)/lib -llua -L$(CTHREADPOOL_DIR) -lcthreadpool
 include $(TOP)/build/application.mk
 
 CLEAN_LIST += $(OBJS)
@@ -44,12 +44,14 @@ CLEAN_LIST += $(OBJS:.o=.d)
 CLEAN_LIST += $(GEN_C_FILES)
 
 all_targets:$(DYNLIB_DIR)
-	for t in $(DYN_LIBS_LIST); do $(MAKE) DYNLIB=$$t application-target|| exit -1;done	
+	for t in $(DYN_LIBS_LIST); do $(MAKE) DYNLIB=$$t application-target|| exit -1;done
 zip:
 	git archive --format=zip --prefix=l7detect/ HEAD > l7detect.zip
+cstags:
+	find $(PWD) -name "*.[ch]" -type f > cscope.files;cscope -b
 
 clean:
-	rm -f $(TARGET) 
+	rm -f $(TARGET)
 	rm -f $(CLEAN_LIST)
 
 clobber: clean

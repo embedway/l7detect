@@ -49,10 +49,25 @@ $(LIBLUA):$(LIBLUA_DIR)
 	cd $(LIBLUA_DIR)/src;make all MYCFLAGS=-fPIC;cd ..;make local;cp $(LIBLUA_DIR)/lib/liblua.a $@
 
 $(LIBLUA_DIR):
-	mkdir -p $(THIRD_BUILD_DIR)
 	tar -C $(THIRD_BUILD_DIR) -xzvf $(TOP)/lib/third/source/lua-5.1.4.tar.gz
 
 ##########################end libevent make##################################
+
+#########################start CThreadpool make##############################
+CTHREADPOOL_DIR=$(THIRD_BUILD_DIR)/cthreadpool
+LIBCTP := $(CTHREADPOOL_DIR)/libcthreadpool.a
+PRE_LIST += $(LIBCTP)
+
+$(LIBCTP):$(CTHREADPOOL_DIR)
+	cd $(CTHREADPOOL_DIR);make
+	ln -fs $(CTHREADPOOL_DIR)/*.h $(TOP)/include
+
+$(CTHREADPOOL_DIR):
+	tar -C $(THIRD_BUILD_DIR) -xzvf $(TOP)/lib/third/source/cthreadpool.tar.gz
+	cd $(CTHREADPOOL_DIR);patch -p1 < $(TOP)/lib/third/patch/cthreadpool.patch;
+
+#########################end CThreadpool make################################
+
 
 #  standard component Makefile footer
 

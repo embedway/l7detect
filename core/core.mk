@@ -8,6 +8,7 @@ LIBRARY := $(OBJ_DIR)/libcore.a
 
 API_OBJS = $(OBJ_DIR)/main.o
 API_OBJS += $(OBJ_DIR)/conf.o
+API_OBJS += $(OBJ_DIR)/pcap_live.o
 API_OBJS += $(OBJ_DIR)/pcap_read.o
 API_OBJS += $(OBJ_DIR)/recv.o
 API_OBJS += $(OBJ_DIR)/decap.o
@@ -29,9 +30,9 @@ DEPS_$(d)   :=  $(OBJS_$(d):.o=.d)
 
 LIBS_LIST   :=  $(LIBS_LIST) $(LIBRARY)
 
-CLEAN_LIST := $(CLEAN_LIST) 
-CLEAN_LIST += $(OBJS_$(d)) 
-CLEAN_LIST += $(DEPS_$(d)) 
+CLEAN_LIST := $(CLEAN_LIST)
+CLEAN_LIST += $(OBJS_$(d))
+CLEAN_LIST += $(DEPS_$(d))
 CLEAN_LIST += $(LIBRARY) *~
 
 -include $(DEPS_$(d))

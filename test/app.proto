@@ -1,7 +1,7 @@
 gstate = {init=0, s1=1, s2=2, s3=3, s4=4, s5=5, s6=6, s7=7, s8=8, final=9}
 --lde引擎是顺序匹配，顺序由proto_list决定
 proto_list={"qq_talk", "ppstream", "qqlive", "http", "dns", "ssl", "nat",
-			"sametime", "qq_file"}
+			"sametime", "qq_file", "ssh"}
 engine_list={"pde", "lde"}
 pkb_dir = {up=1, down=2}
 
@@ -91,6 +91,8 @@ ssl.pde = "tcp/443"
 sametime = {}
 sametime.pde = "tcp/1533"
 
+ssh = {}
+ssh.pde = "tcp/22"
 --[[for k, v in pairs(qq_chat)
 do
 print(k,v)

@@ -18,6 +18,7 @@ static void (*original_sig_int)(int num);
 static void (*original_sig_term)(int num);
 
 volatile int system_exit;
+module_hd_t *module_hd_p;
 log_t *syslog_p;
 
 void cap_term(int signum)
@@ -35,7 +36,7 @@ static int32_t __sys_init()
     original_sig_term = signal(SIGTERM, cap_term);
 
     system_exit = 0;
-	
+
 	/*日志*/
 	if ((syslog_p = log_init(g_conf.logfile, DEBUG)) == NULL) {
 		return -INIT_ERROR;
@@ -88,14 +89,14 @@ static module_hd_t* __module_init()
 	module_list_add(module_hd_p, "session", &session_frm_ops);
 	module_list_add(module_hd_p, "sf_plugin", &sf_plugin_ops);
 	module_list_add(module_hd_p, "action", NULL);
-	
+
 	module_tag_bind(module_hd_p, pktag_hd_p, "recv", "start");
 	module_tag_bind(module_hd_p, pktag_hd_p, "decap", "decap");
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "tunnel", "gtp");
 	module_tag_bind(module_hd_p, pktag_hd_p, "tunnel", "gre");
 	module_tag_bind(module_hd_p, pktag_hd_p, "tunnel", "l2tp");
-	
+
 	module_tag_bind(module_hd_p, pktag_hd_p, "reassemble", "ipv4_frag");
 	module_tag_bind(module_hd_p, pktag_hd_p, "reassemble", "ipv6_frag");
 
@@ -104,10 +105,10 @@ static module_hd_t* __module_init()
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "parsed");
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "sf_plugin", "sf_plugin");
-	
+
 	assert(module_list_init(module_hd_p) == 0);
 	assert(module_list_start(module_hd_p) == 0);
-	
+
 	return module_hd_p;
 }
 
@@ -116,14 +117,13 @@ static int32_t __module_fini(module_hd_t **module_hd_pp)
 	int status;
     status = module_manage_fini(module_hd_pp);
     if_error_return(status == STATUS_OK, status);
-	
+
     return STATUS_OK;
 }
 
 int main(int argc, char *argv[])
 {
 	int32_t status;
-	module_hd_t *module_hd_p;
 
 /*获取配置*/
 	conf_init();
@@ -137,11 +137,11 @@ int main(int argc, char *argv[])
 	assert(__sys_init() == 0);
 
 	log_notice(syslog_p, "sys init OK!\n");
-	
+
 	pktag_hd_p  = __tag_init();
 	assert(pktag_hd_p);
 	log_notice(syslog_p, "tag init OK!\n");
-	
+
 	module_hd_p = __module_init();
 	assert(module_hd_p);
 	log_notice(syslog_p, "module init OK!\n");
@@ -155,7 +155,7 @@ int main(int argc, char *argv[])
 	} else {
 		log_notice(syslog_p, "module safe exit...\n");
 	}
-	
+
 	__tag_fini(&pktag_hd_p);
 	log_notice(syslog_p, "tag safe exit...\n");
 

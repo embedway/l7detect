@@ -58,13 +58,13 @@ typedef struct decap_info {
 	uint8_t cap_num;
 } decap_info_t;
 
-module_ops_t decap_mod_ops = {					
+module_ops_t decap_mod_ops = {
 	.init = decap_init,
-	.start = NULL,					
+	.start = NULL,
 	.process = decap_process,
 	.result_get = decap_result_get,
 	.result_free = decap_result_free,
-	.fini = decap_fini,	
+	.fini = decap_fini,
 };
 
 static inline void __pkts_cap(decap_info_t *info, uint32_t code)
@@ -82,8 +82,8 @@ static inline void __pkts_dump(decap_info_t *info)
 	int i;
 	for (i=0; i<info->cap_num; i++) {
 		log_print(syslog_p, "--------------------code:%d-------------------\n", info->cap_pkts[i].code);
-		list_format_print_buffer(syslog_p, 
-								 info->cap_pkts[i].pkts_cap, 8, 
+		list_format_print_buffer(syslog_p,
+								 info->cap_pkts[i].pkts_cap, 8,
 								 info->cap_pkts[i].pkts_len, FORMAT_PRINT_WITH_HEAD);
 		log_print(syslog_p, "\n");
 	}
@@ -138,7 +138,7 @@ do_decap_ether:
 	ptr += sizeof(dpi_ether_hdr_t);
 	ether_type = ntohs(ether->type);
 	vlan_layer = 0;
-	
+
 	while ((ether_type == DPI_ETHTYPE_VLAN) || (ether_type == DPI_ETHTYPE_VLAN2)) {
         vlan = (dpi_vlan_hdr_t *)ptr;
         ptr += sizeof(dpi_vlan_hdr_t);
@@ -208,12 +208,11 @@ do_decap_ipv4:
 		packet->pktag = tag;
 		return tag;
     }
-	
+
 	ptr += ipv4->hdr_len * 4;
 	ip_protocol = ipv4->protocol;
 	packet->real_applen = ntohs(ipv4->length) - ipv4->hdr_len * 4;
 	packet->app_type = INVALID_PROTO_ID;
-	
 	switch (ip_protocol) {
 	case DPI_IPPROT_ICMP:
         packet->prot_types[packet->prot_depth] = DPI_PROT_ICMP;
@@ -262,18 +261,18 @@ do_decap_udp:
 		__pkts_cap(info, MALFORMED_PKTS);
 		stats->malformed_pkts++;
 		packet->pktag = 0;
+        TRACE;
 		return 0;
 	}
-	
 do_decap_icmp:
 	//__pkts_cap(info, DPI_PROT_ICMP);
-	
+
 	packet->pktag = 0;
 	stats->icmp_pkts++;
 	return 0;
 do_decap_ipv6:
 	//__pkts_cap(info, DPI_PROT_IPV6);
-	packet->pktag = 0;			
+	packet->pktag = 0;
 	stats->ipv6_pkts++;
 	return 0;
 do_decap_unhandle:
@@ -289,19 +288,19 @@ unknown_pkts:
 
 static void* decap_result_get(module_info_t *this)
 {
-	decap_info_t *info = (decap_info_t *)(this->resource);	
+	decap_info_t *info = (decap_info_t *)(this->resource);
 	return info->packet;
 }
 
 static void decap_result_free(module_info_t *this)
 {
-	decap_info_t *info = (decap_info_t *)(this->resource);	
+	decap_info_t *info = (decap_info_t *)(this->resource);
 	info->packet = NULL;
 }
 
 static int decap_fini(module_info_t *this)
 {
-	decap_info_t *info = (decap_info_t *)(this->resource);	
+	decap_info_t *info = (decap_info_t *)(this->resource);
 	decap_stats_t *stats = &info->stats;
 
 	log_notice(syslog_p, "\n------------------decapinfo---------------\n");
@@ -317,7 +316,7 @@ static int decap_fini(module_info_t *this)
 
 	log_notice(syslog_p, "\n------------------decap packet info---------------\n");
 	__pkts_dump(info);
-	
+
 	log_notice(syslog_p, "\n");
 	if (info) {
 		free(info);

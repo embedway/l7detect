@@ -19,3 +19,4 @@ cscope.*
 !.gitignore
 test/*.pcap
 tags
+include/threadpool.h
