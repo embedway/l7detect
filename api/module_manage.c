@@ -30,7 +30,7 @@ int32_t module_list_add(module_hd_t *head_p, char *name, module_ops_t *ops)
 {
 	int i = 0;
 	module_info_t *modules;
-	
+
 	assert(head_p);
 	assert(head_p->module_info);
 	assert(name);
@@ -54,24 +54,43 @@ void module_tag_bind(module_hd_t *module_head, tag_hd_t *tag_head, char *module_
 
 	tag_index = tag_id_get_from_name(tag_head, tag_name);
 	assert(tag_index);
-	
+
 	tag_info = tag_head->tag_info;
 	tag_info[tag_index].module_id = module_index;
 }
 
-int32_t module_list_init(module_hd_t *head_p)
+int32_t module_list_init_global(module_hd_t *head_p)
 {
 	int i;
 	int status;
 	module_info_t *modules;
-	
+
 	assert(head_p);
 	assert(head_p->module_info);
-	modules	= head_p->module_info;	
-	
+	modules	= head_p->module_info;
+
 	for (i=1; i<(int)head_p->module_valid + 1; i++) {
-		if ((modules[i].ops != NULL) && (modules[i].ops->init != NULL)) {
-			status = modules[i].ops->init(&modules[i]);
+		if ((modules[i].ops != NULL) && (modules[i].ops->init_global != NULL)) {
+			status = modules[i].ops->init_global(&modules[i]);
+			assert(status == 0);
+		}
+	}
+	return STATUS_OK;
+}
+
+int32_t module_list_init_local(module_hd_t *head_p)
+{
+	int i;
+	int status;
+	module_info_t *modules;
+
+	assert(head_p);
+	assert(head_p->module_info);
+	modules	= head_p->module_info;
+
+	for (i=1; i<(int)head_p->module_valid + 1; i++) {
+		if ((modules[i].ops != NULL) && (modules[i].ops->init_local != NULL)) {
+			status = modules[i].ops->init_local(&modules[i]);
 			assert(status == 0);
 		}
 	}
@@ -106,7 +125,7 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, int32_t init_t
 	void *data;
 	uint16_t i;
 	uint64_t module_hit_mask = 0;
-	
+
 	assert(head_p);
 	assert(head_p->module_info);
 
@@ -127,7 +146,7 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, int32_t init_t
 	} else {
 		data = init_data;
 	}
-	
+
 	do {
 		current_mod = &modules[current];
 		current_ops = current_mod->ops;
@@ -137,7 +156,7 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, int32_t init_t
 		if ((current_ops != NULL) && (current_ops->process != NULL)) {
 			if (last_ops && last_ops->result_get != NULL) {
 				data = last_ops->result_get(last_mod);
-			} 
+			}
 
 			tagid = current_ops->process(&modules[current], data);
 			module_hit_mask |= 1<<current;
@@ -182,7 +201,7 @@ module_info_t *module_info_get_from_name(module_hd_t *head_p, char *name)
 	}
 	if (i <= head_p->module_valid) {
 		return &modules[i];
-	} 
+	}
 	return NULL;
 }
 
@@ -220,7 +239,7 @@ void module_list_show(module_hd_t *head_p)
 
 	print("ewx module information:\n");
 	print("%16s %5s\n", "module name", "id");
-	
+
 	if (modules != NULL) {
 		for (i=1; i<(int)head_p->module_valid + 1; i++) {
 			print("%16s %5d\n", modules[i].name, i);
@@ -258,7 +277,7 @@ int32_t module_manage_fini(module_hd_t **head_pp)
 {
 	module_info_t *modules;
 	module_hd_t *head_p = *head_pp;
-	
+
 	module_list_fini(head_p);
 	if (head_p != NULL) {
 		modules = head_p->module_info;

@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include "code.h"
 
+#define MAX_WORKER_THREAD 16
+
 /*
 typedef unsigned char uint8_t;
 typedef unsigned short uint16_t;

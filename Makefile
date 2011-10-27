@@ -22,6 +22,9 @@ include $(dir)/test.mk
 dir:=$(TOP)/lib
 include $(dir)/lib.mk
 
+dir:=$(TOP)/sys
+include $(dir)/sys.mk
+
 dir:=$(TOP)/api
 include $(dir)/api.mk
 

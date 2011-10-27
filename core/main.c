@@ -106,10 +106,14 @@ static module_hd_t* __module_init()
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "sf_plugin", "sf_plugin");
 
-	assert(module_list_init(module_hd_p) == 0);
-	assert(module_list_start(module_hd_p) == 0);
+	assert(module_list_init_global(module_hd_p) == 0);
 
 	return module_hd_p;
+}
+
+static void __module_start(module_hd_t *module_hd_p)
+{
+	assert(module_list_start(module_hd_p) == 0);
 }
 
 static int32_t __module_fini(module_hd_t **module_hd_pp)
@@ -144,6 +148,8 @@ int main(int argc, char *argv[])
 
 	module_hd_p = __module_init();
 	assert(module_hd_p);
+
+    __module_start(module_hd_p);
 	log_notice(syslog_p, "module init OK!\n");
 
 /*开始处理*/
