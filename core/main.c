@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <assert.h>
 #include <signal.h>
+#include "thread.h"
 
 #include "common.h"
 #include "conf.h"
@@ -20,6 +21,9 @@ static void (*original_sig_term)(int num);
 volatile int system_exit;
 module_hd_t *module_hd_p;
 log_t *syslog_p;
+#ifdef __linux__
+static struct threadpool tp;
+#endif
 
 void cap_term(int signum)
 {
@@ -42,6 +46,10 @@ static int32_t __sys_init()
 		return -INIT_ERROR;
 	}
 
+    assert(sys_thread_global_init());
+
+    tp = threadpool_init(g_conf.thread_num);
+    assert(tp);
     return STATUS_OK;
 }
 
@@ -50,6 +58,9 @@ static int32_t __sys_fini()
 	if (log_fini(&syslog_p) != 0) {
 		return -FINI_ERROR;
 	}
+    if (sys_thread_global_fini() != 0) {
+        return -FINI_ERROR;
+    }
     return STATUS_OK;
 }
 
@@ -154,7 +165,6 @@ int main(int argc, char *argv[])
 
 /*开始处理*/
 	process_loop(module_hd_p);
-
 /*处理结束*/
 	if (__module_fini(&module_hd_p) != 0) {
 		log_error(syslog_p, "Some module finish error...\n");

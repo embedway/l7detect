@@ -97,6 +97,20 @@ int32_t module_list_init_local(module_hd_t *head_p)
 	return STATUS_OK;
 }
 
+void* module_priv_rep_get(module_info_t *module)
+{
+    uint32_t thread_id = sys_thread_id_get();
+    assert(thread_id < MAX_WORKER_THREAD);
+    return &module->priv_rep[thread_id];
+}
+
+void module_priv_rep_set(module_info_t *module, void *data)
+{
+    uint32_t thread_id = sys_thread_id_get();
+    assert(thread_id < MAX_WORKER_THREAD);
+    module->priv_rep[thread_id] = data;
+}
+
 int32_t module_list_start(module_hd_t *head_p)
 {
 	int i;

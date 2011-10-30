@@ -74,6 +74,24 @@ int32_t module_list_init_global(module_hd_t *head);
 int32_t module_list_init_local(module_hd_t *head);
 
 /**
+ * @brief 获取模块线程私有变量
+ *
+ * @param module 模块指针
+ *
+ * @return 线程私有变量指针
+ */
+void* module_priv_rep_get(module_info_t *module);
+
+/**
+ * @brief 设置模块线程私有变量的指针指向data
+ *
+ * @param module 模块指针
+ * @param data 数据指针
+ *
+ */
+void module_priv_rep_set(module_info_t *module, void *data);
+
+/**
  * 模块启动函数，该函数会按照id的顺序通过回调启动所有注册的模块
  *
  * @param head 模块的头指针
@@ -88,7 +106,7 @@ int32_t module_list_start(module_hd_t *head);
  * @param head_p 模块头指针
  * @param tag_p tag头指针
  * @param init_tag  初始的tag，如果tag <= 0，那么运行时从第一个module开始，否则从tag绑定的module开始
- * @param init_data 初始传入的data
+  @param init_data 初始传入的data
  *
  * @return 0，成功；< 0，失败原因；
  */
