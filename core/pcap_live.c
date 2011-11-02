@@ -10,7 +10,6 @@
 #include "parser.h"
 #include "log.h"
 #include "process.h"
-#include "threadpool.h"
 
 #define MAX_PACKET_HANDLE 200
 #define CAP_LIVE_TIMEOUT 1000
@@ -22,56 +21,51 @@ typedef struct pcap_live_stats {
 	uint64_t oversize_pkts;
 } pcap_live_stats_t;
 
-typedef struct threadpool threadpool_t;
-typedef struct pcap_live {
-	packet_t *packet;
+typedef struct info_global {
+ 	packet_t *packet;
 	zone_t *zone;
 	pcap_live_stats_t stats;
     pcap_t *pcap;
-    threadpool_t *tp;
-} pcap_live_t;
+} info_global_t;
 
-static int32_t pcap_live_init(module_info_t *this);
+/*这个模块是单线程的，因此和local相关的都不需要处理*/
+static int32_t pcap_live_init_global(module_info_t *this);
 static int32_t pcap_live_process(module_info_t *this, void *data);
 static void* pcap_live_result_get(module_info_t *this);
 static void pcap_live_result_free(module_info_t *this);
-static int pcap_live_fini(module_info_t *this);
+static int32_t pcap_live_fini_global(module_info_t *this);
 static int16_t tag_decap;
 
 module_ops_t pcap_live_ops = {
-	.init = pcap_live_init,
+	.init_global = pcap_live_init_global,
+    .init_local = NULL,
 	.start = NULL,
 	.process = pcap_live_process,
 	.result_get = pcap_live_result_get,
 	.result_free = pcap_live_result_free,
-	.fini = pcap_live_fini,
+	.fini_global = pcap_live_fini_global,
+	.fini_local = NULL,
 };
 
-static int32_t pcap_live_init(module_info_t *this)
+static int32_t pcap_live_init_global(module_info_t *this)
 {
-	pcap_live_t *p;
+	info_global_t *p;
 	char ebuf[PCAP_ERRBUF_SIZE];
-    threadpool_t *tp;
 
 	assert(this != NULL);
 
-	this->resource = (pcap_live_t *)malloc(sizeof(pcap_live_t));
-	assert(this->resource);
+	p = zmalloc(info_global_t *, sizeof(info_global_t));
+	assert(p);
 
-	memset(this->resource, 0, sizeof(pcap_live_t));
-	p = (pcap_live_t *)this->resource;
 	p->pcap = pcap_open_live(g_conf.u.device, MAX_PACKET_LEN, 1, CAP_LIVE_TIMEOUT, ebuf);
 	assert(p->pcap);
 
 	p->zone = zone_init("pcap_live", sizeof(packet_t) + MAX_PACKET_LEN, MAX_PACKET_HANDLE);
 	assert(p->zone);
 
-    tp = threadpool_init(g_conf.thread_num);
-    assert(tp);
-
-    p->tp = tp;
 	tag_decap = tag_id_get_from_name(pktag_hd_p, "decap");
 
+    this->pub_rep = (void *)p;
 	log_notice(syslog_p, "pcap_live module init OK\n");
 	return 0;
 }
@@ -86,7 +80,7 @@ static void
 pcap_live_cb(u_char *user, const struct pcap_pkthdr *hdr,
           const u_char *pd)
 {
-	pcap_live_t *p = (pcap_live_t *)user;
+    info_global_t *p = (info_global_t *)user;
     packet_t *packet;
 
   	assert(!p->packet);
@@ -115,10 +109,10 @@ pcap_live_cb(u_char *user, const struct pcap_pkthdr *hdr,
 
 static int32_t pcap_live_process(module_info_t *this, void *data)
 {
-	pcap_live_t *p;
+	info_global_t *p;
     int inpkts;
 
-	p = (pcap_live_t *)this->resource;
+	p = (info_global_t *)this->pub_rep;
     inpkts = pcap_dispatch(p->pcap, 1, pcap_live_cb, (u_char *)p);
     if (inpkts > 0) {
         return tag_decap;
@@ -129,17 +123,19 @@ static int32_t pcap_live_process(module_info_t *this, void *data)
 
 static void* pcap_live_result_get(module_info_t *this)
 {
-	pcap_live_t *pcap = this->resource;
-	if (pcap != NULL) {
-		return pcap->packet;
+	info_global_t *p;
+
+    p = (info_global_t *)this->pub_rep;
+	if (p != NULL) {
+		return p->packet;
 	}
 	return NULL;
 }
 
 static void pcap_live_result_free(module_info_t *this)
 {
-	if (this->resource != NULL) {
-		pcap_live_t *p = this->resource;
+	if (this->pub_rep != NULL) {
+		info_global_t *p = this->pub_rep;
 		if (p->packet) {
 			zone_free(p->zone, p->packet);
 			p->packet = NULL;
@@ -147,9 +143,9 @@ static void pcap_live_result_free(module_info_t *this)
 	}
 }
 
-static int pcap_live_fini(module_info_t *this)
+static int32_t pcap_live_fini_global(module_info_t *this)
 {
-	pcap_live_t *p = this->resource;
+    info_global_t *p = this->pub_rep;
 
 	log_notice(syslog_p, "    pcap_live Stats:\n");
 	log_notice(syslog_p, "    Good packets    :%d\n", p->stats.good_pkts);
@@ -157,7 +153,6 @@ static int pcap_live_fini(module_info_t *this)
 	log_notice(syslog_p, "    Drop packets    :%d\n", p->stats.drop_pkts);
 	log_notice(syslog_p, "    Oversize packets:%d\n", p->stats.drop_pkts);
 
-    threadpool_free(p->tp, 1);
 	if (p->zone) {
 		zone_fini(p->zone);
 		p->zone = NULL;

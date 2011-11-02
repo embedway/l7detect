@@ -1,5 +1,6 @@
 #ifndef __THREAD__
 #define __THREAD__
+#include "common.h"
 
 uint32_t thread_init_global();
 uint32_t thread_init_local();

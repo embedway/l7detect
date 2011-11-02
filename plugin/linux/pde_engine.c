@@ -16,9 +16,9 @@
 #include "ldlua.h"
 #include "engine_comm.h"
 
-static int32_t pde_engine_init(module_info_t *this);
+static int32_t pde_engine_init_global(module_info_t *this);
 static int32_t pde_engine_process(module_info_t *this, void *data);
-static int32_t pde_engine_fini(module_info_t *this);
+static int32_t pde_engine_fini_global(module_info_t *this);
 
 static log_t *ptlog_p;
 
@@ -34,20 +34,22 @@ static log_t *ptlog_p;
 	} while(p)
 
 module_ops_t pde_engine_ops = {
-	.init = pde_engine_init,
+	.init_global = pde_engine_init_global,
+    .init_local = NULL,
 	.start = NULL,
 	.process = pde_engine_process,
 	.result_get = NULL,
 	.result_free = NULL,
-	.fini = pde_engine_fini,
+	.fini_global = pde_engine_fini_global,
+	.fini_local = NULL,
 };
 
-typedef struct pde_engine_info{
+typedef struct info_global {
 	sf_proto_conf_t *conf;
 	uint32_t pde_engine_id;
 	longmask_t* pde_table[PDE_PROTO_NUM][PDE_PORT_NUM];
 	//list_head_t *pde_table[PDE_PROTO_NUM];
-} pde_engine_info_t;
+} info_global_t;
 
 kv_table_t pde_prot[] = {
 	{"tcp", DPI_IPPROT_TCP},
@@ -55,7 +57,7 @@ kv_table_t pde_prot[] = {
 	{NULL, 0},
 };
 
-static int32_t __parse_pde_proto_conf(proto_conf_t *proto_conf, 
+static int32_t __parse_pde_proto_conf(proto_conf_t *proto_conf,
 									  uint32_t app_id, uint32_t engine_id,
 									  longmask_t* pde_table[PDE_PROTO_NUM][PDE_PORT_NUM])
 {
@@ -63,7 +65,7 @@ static int32_t __parse_pde_proto_conf(proto_conf_t *proto_conf,
 	uint16_t proto, port;
 	int32_t i;
 	proto_engine_data_t *engine_data;
-	
+
 	engine_data = &proto_conf->engine_data[engine_id];
 	assert(engine_data);
 
@@ -109,7 +111,7 @@ static int32_t __pde_conf_read(sf_proto_conf_t *conf, uint32_t pde_engine_id,
 	uint32_t i;
 	proto_conf_t *protos = conf->protos;
 	//int32_t proto_id;
-	
+
 	assert(protos);
 
 	for (i=0; i<conf->total_proto_num; i++) {
@@ -125,14 +127,14 @@ static int32_t __pde_conf_read(sf_proto_conf_t *conf, uint32_t pde_engine_id,
 	return 0;
 }
 
-static int32_t pde_engine_init(module_info_t *this)
+static int32_t pde_engine_init_global(module_info_t *this)
 {
-	sf_proto_conf_t *conf = (sf_proto_conf_t *)this->resource;
-	pde_engine_info_t *info;
+	sf_proto_conf_t *conf = (sf_proto_conf_t *)this->pub_rep;
+	info_global_t *info;
 	int32_t status;
 	uint32_t i, j;
 
-	info = zmalloc(pde_engine_info_t *, sizeof(pde_engine_info_t));
+	info = zmalloc(info_global_t *, sizeof(info_global_t));
 	assert(info);
 
 	info->conf = conf;
@@ -149,11 +151,11 @@ static int32_t pde_engine_init(module_info_t *this)
 
 	info->pde_engine_id = engine_id_get(conf, "pde");
 	assert(info->pde_engine_id != INVALID_ENGINE_ID);
-	
+
    	status = __pde_conf_read(conf, info->pde_engine_id, info->pde_table);
 	assert(status == 0);
 
-	this->resource = (pde_engine_info_t *)info;
+	this->pub_rep = (info_global_t *)info;
 	return 0;
 }
 
@@ -164,23 +166,23 @@ static int32_t pde_engine_process(module_info_t *this, void *data)
 	dpi_ipv4_hdr_t *iphdr;
 	dpi_l4_hdr_t *l4hdr;
 	int proto_index;
-	pde_engine_info_t *info;
+	info_global_t *info;
 	uint16_t port;
 	sf_proto_conf_t *conf;
 	uint32_t tag = 0;
 	int32_t app_id;
 
-	info = (pde_engine_info_t *)this->resource;
+	info = (info_global_t *)this->pub_rep;
 	conf = info->conf;
 	proto_comm = (proto_comm_t *)data;
 	packet = proto_comm->packet;
-	
+
 	iphdr = (dpi_ipv4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-2]);
 	l4hdr = (dpi_l4_hdr_t *)((void *)packet->data + packet->prot_offsets[packet->prot_depth-1]);
 	proto_index = kv_get_index_from_value(pde_prot, iphdr->protocol);
 	if ((proto_index == -1) || (proto_index >= PDE_PROTO_NUM)) {
 		return info->pde_engine_id + 1;
-	} 
+	}
 
 	if ((packet->dir & PKT_DIR_MASK) == PKT_DIR_UPSTREAM) {
 		port = ntohs(l4hdr->dst_port);
@@ -190,11 +192,11 @@ static int32_t pde_engine_process(module_info_t *this, void *data)
 
 	/*处理上一个引擎发过来的mask*/
 	longmask_op_and(proto_comm->match_mask[info->pde_engine_id], info->pde_table[proto_index][port]);
-	app_id = handle_engine_mask(conf, proto_comm->match_mask[info->pde_engine_id], 
-								proto_comm->match_mask, info->pde_engine_id, 
+	app_id = handle_engine_mask(conf, proto_comm->match_mask[info->pde_engine_id],
+								proto_comm->match_mask, info->pde_engine_id,
 								&tag, 1);
 	longmask_all_clr(proto_comm->match_mask[info->pde_engine_id]);
-	
+
 	if (app_id < 0) {
 		/*处理本引擎开始的mask*/
 		app_id = handle_engine_mask(conf, info->pde_table[proto_index][port], proto_comm->match_mask,
@@ -209,12 +211,12 @@ static int32_t pde_engine_process(module_info_t *this, void *data)
 	return tag;
 }
 
-static int32_t pde_engine_fini(module_info_t *this)
+static int32_t pde_engine_fini_global(module_info_t *this)
 {
-	pde_engine_info_t *info;
+	info_global_t *info;
 	uint32_t i, j;
 
-	info = (pde_engine_info_t *)this->resource;
+	info = (info_global_t *)this->pub_rep;
 	for (i=0; i<PDE_PROTO_NUM; i++) {
 		for (j=0; j<PDE_PORT_NUM; j++) {
 			if (info->pde_table[i][j] != NULL) {
@@ -222,7 +224,7 @@ static int32_t pde_engine_fini(module_info_t *this)
 			}
 		}
 	}
-	
+
 	if (info) {
 		free(info);
 	}

@@ -17,6 +17,7 @@ enum {
 	MODE_NOT_SET,
 	MODE_LIVE,
 	MODE_FILE,
+    MODE_SE,
 };
 
 typedef struct session_conf {

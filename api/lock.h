@@ -30,8 +30,8 @@ typedef pthread_spinlock_t spinlock_t;
 #define rwlock_destory pthread_rwlock_destroy
 typedef pthread_rwlock_t rwlock_t ;
 
-#endif
 #else
 #error "Not supported now"
+#endif
 
 #endif

@@ -20,48 +20,53 @@ typedef struct pcap_stats {
 	uint64_t oversize_pkts;
 } pcap_stats_t;
 
-typedef struct pcap_read {
-	packet_t *packet;
+typedef struct info_global {
 	pcap_t *pcap;
 	zone_t *zone;
+    packet_t *packet;
 	pcap_stats_t stats;
-} pcap_read_t;
+} info_global_t;
 
-static int32_t pcap_read_init(module_info_t *this);
+/*这个模块是单线程的，因此和local相关的都不需要处理*/
+static int32_t pcap_read_init_global(module_info_t *this);
+//static int32_t pcap_read_init_local(module_info_t *this, uint32_t thread_id);
 static int32_t pcap_read_process(module_info_t *this, void *data);
 static void* pcap_read_result_get(module_info_t *this);
 static void pcap_read_result_free(module_info_t *this);
-static int pcap_read_fini(module_info_t *this);
+static int pcap_read_fini_global(module_info_t *this);
+//static int pcap_read_fini_local(module_info_t *this, uint32_t thread_id);
 static int16_t tag_decap;
 
-module_ops_t pcap_read_ops = {					
-	.init = pcap_read_init,
-	.start = NULL,					
+module_ops_t pcap_read_ops = {
+	.init_global = pcap_read_init_global,
+    .init_local = NULL,
+	.start = NULL,
 	.process = pcap_read_process,
 	.result_get = pcap_read_result_get,
 	.result_free = pcap_read_result_free,
-	.fini = pcap_read_fini,	
+	.fini_global = pcap_read_fini_global,
+    .fini_local = NULL,
 };
 
-static int32_t pcap_read_init(module_info_t *this)
+static int32_t pcap_read_init_global(module_info_t *this)
 {
-	pcap_read_t *p;
+	info_global_t *p;
+
 	char ebuf[PCAP_ERRBUF_SIZE];
 	assert(this != NULL);
 
-	this->resource = (pcap_read_t *)malloc(sizeof(pcap_read_t));
-	assert(this->resource);
+	p = zmalloc(info_global_t *, sizeof(info_global_t));
+	assert(p);
 
-	memset(this->resource, 0, sizeof(pcap_read_t));
-	p = (pcap_read_t *)this->resource;
 	p->pcap = pcap_open_offline(g_conf.u.capfile, ebuf);
 	assert(p->pcap);
-	
+
 	p->zone = zone_init("pcap_read", sizeof(packet_t) + MAX_PACKET_LEN, MAX_PACKET_HANDLE);
 	assert(p->zone);
-	
+
 	tag_decap = tag_id_get_from_name(pktag_hd_p, "decap");
 
+    this->pub_rep = (void *)p;
 	log_notice(syslog_p, "pcap_read module init OK\n");
 	return 0;
 }
@@ -78,18 +83,18 @@ static int32_t pcap_read_process(module_info_t *this, void *data)
 	struct pcap_pkthdr hdr;
 	const u_char *ptr;
 	packet_t *packet;
-	pcap_read_t *p;
+	info_global_t *p;
 	uint16_t tag = tag_decap;
-	
-	p = (pcap_read_t *)this->resource;
+
+	p = (info_global_t *)(this->pub_rep);
 	ptr = pcap_next(p->pcap, &hdr);
-	
+
 	if (ptr == NULL) {
 		return -1;
 	}
 
 	assert(!p->packet);
-	
+
 	packet = zone_alloc(p->zone, 0);
 	if (packet == NULL) {
 		p->stats.drop_pkts++;
@@ -115,17 +120,17 @@ static int32_t pcap_read_process(module_info_t *this, void *data)
 
 static void* pcap_read_result_get(module_info_t *this)
 {
-	pcap_read_t *pcap = this->resource;
-	if (pcap != NULL) {
-		return pcap->packet;
+	info_global_t *p = (info_global_t *)(this->pub_rep);
+	if (p != NULL) {
+		return p->packet;
 	}
 	return NULL;
 }
 
 static void pcap_read_result_free(module_info_t *this)
 {
-	if (this->resource != NULL) {
-		pcap_read_t *p = this->resource;
+	if (this->pub_rep != NULL) {
+		info_global_t *p = this->pub_rep;
 		if (p->packet) {
 			zone_free(p->zone, p->packet);
 			p->packet = NULL;
@@ -133,9 +138,9 @@ static void pcap_read_result_free(module_info_t *this)
 	}
 }
 
-static int pcap_read_fini(module_info_t *this)
+static int pcap_read_fini_global(module_info_t *this)
 {
-	pcap_read_t *p = this->resource;
+	info_global_t *p = (info_global_t *)(this->pub_rep);
 
 	log_notice(syslog_p, "    pcap_read Stats:\n");
 	log_notice(syslog_p, "    Good packets    :%d\n", p->stats.good_pkts);

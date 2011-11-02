@@ -14,6 +14,7 @@
 #include "common.h"
 #include "mem.h"
 #include "module_manage.h"
+#include "sys.h"
 #include "conf.h"
 #include "parser.h"
 #include "log.h"
@@ -23,23 +24,27 @@
 
 #define INC_CNT(count) count++
 
-static int32_t session_frm_init(module_info_t *this);
+static int32_t session_frm_init_global(module_info_t *this);
+static int32_t session_frm_init_local(module_info_t *this, uint32_t thread_id);
 static int32_t session_frm_process(module_info_t *this, void *data);
 static void* session_frm_result_get(module_info_t *this);
 static void session_frm_result_free(module_info_t *this);
-static int session_frm_fini(module_info_t *this);
+static int session_frm_fini_global(module_info_t *this);
+static int session_frm_fini_local(module_info_t *this, uint32_t thread_id);
 
 static uint16_t sf_plugin_tag;
 static uint16_t parsed_tag;
 static uint16_t next_stage_tag; /*未来扩展使用*/
 
 module_ops_t session_frm_ops = {
-	.init = session_frm_init,
-	.start = NULL,
+	.init_global = session_frm_init_global,
+	.init_local = session_frm_init_local,
+    .start = NULL,
 	.process = session_frm_process,
 	.result_get = session_frm_result_get,
 	.result_free = session_frm_result_free,
-	.fini = session_frm_fini,
+	.fini_global = session_frm_fini_global,
+    .fini_local = session_frm_fini_local,
 };
 
 typedef struct session_frm_stats {
@@ -82,18 +87,21 @@ typedef struct session_item {
 
 typedef uint32_t (*hash_func)(session_index_t *info);
 
-typedef struct session_frm_info {
-	packet_t *packet;
-	hash_table_hd_t *session_table;
-	session_conf_t *conf;
+typedef struct info_global {
+    session_conf_t *conf;
 	sf_proto_conf_t *sf_conf;
+	hash_table_hd_t *session_table;
 	log_t *log_c;
+	hash_func hash_cb;
+} info_global_t;
+
+typedef struct info_local {
+	packet_t *packet;
 	session_item_t *session;	    /**< 流表中找到的表项*/
 	session_index_t index_cache;	/**< 临时的session cache，减小每次进入函数堆栈分配的开销 */
-	hash_func hash_cb;
 	session_frm_stats_t stats;
 	proto_comm_t proto_buf;        /**< 用于处理时传递上一次的数据给sf_plugin */
-} session_frm_info;
+} info_local_t;
 
 typedef struct hash_map {
 	char *name;
@@ -197,11 +205,12 @@ static int32_t session_compare(void *this, void *user_data, void *item)
 	return 1;
 }
 
-static int32_t session_frm_init(module_info_t *this)
+static int32_t session_frm_init_global(module_info_t *this)
 {
-	session_frm_info *info;
+    info_global_t *info;
 	session_conf_t *conf;
 	sf_proto_conf_t *sf_conf;
+    hash_table_hd_t *session_table;
 	uint32_t i;
 	hash_map_t hash_map[] = {
 		{"hash_xor", hash_xor},
@@ -210,9 +219,8 @@ static int32_t session_frm_init(module_info_t *this)
 	};
 
 	assert(sizeof(session_item_t) <= 128);
-	info = zmalloc(session_frm_info *, sizeof(session_frm_info));
+    info = zmalloc(info_global_t *, sizeof(info_global_t));
 	assert(info);
-	this->resource = info;
 
 	conf = (session_conf_t *)conf_module_config_search("session", NULL);
 	assert(conf);
@@ -220,14 +228,15 @@ static int32_t session_frm_init(module_info_t *this)
 	sf_conf = (sf_proto_conf_t *)conf_module_config_search(SF_PROTO_CONF_NAME, NULL);
 	assert(sf_conf);
 
-	info->session_table = hash_table_init(conf->bucket_num, SPINLOCK);
-	assert(info->session_table);
+	session_table = hash_table_init(conf->bucket_num, SPINLOCK);
+	assert(session_table);
+
+    info->session_table = session_table;
+    info->conf = conf;
+    info->sf_conf = sf_conf;
 
 	info->log_c = log_init(conf->session_logname, DEBUG);
 	assert(info->log_c);
-
-	info->conf = conf;
-	info->sf_conf = sf_conf;
 
 	for(i=0; i<sizeof(hash_map)/sizeof(hash_map[0]); i++) {
 		if (strcmp(hash_map[i].name, conf->hash_name) == 0) {
@@ -236,15 +245,30 @@ static int32_t session_frm_init(module_info_t *this)
 		}
 	}
 	assert(info->hash_cb);
-	sf_plugin_tag = tag_id_get_from_name(pktag_hd_p, "sf_plugin");
+
+    this->pub_rep = info;
+
+    sf_plugin_tag = tag_id_get_from_name(pktag_hd_p, "sf_plugin");
 	parsed_tag = tag_id_get_from_name(pktag_hd_p, "parsed");
-	return 0;
+
+    return 0;
+}
+
+
+static int32_t session_frm_init_local(module_info_t *this, uint32_t thread_id)
+{
+    info_local_t *info;
+    info = zmalloc(info_local_t *, sizeof(info_local_t));
+
+    module_priv_rep_set(this, thread_id, (void *)info);
+    return 0;
 }
 
 static int32_t session_frm_process(module_info_t *this, void *data)
 {
 	packet_t *packet;
-	session_frm_info *info = (session_frm_info *)this->resource;
+    info_global_t *gp;
+    info_local_t *lp;
 	session_frm_stats_t *stats;
 	dpi_ipv4_hdr_t *iphdr;
 	dpi_l4_hdr_t *l4hdr;
@@ -256,25 +280,28 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	int32_t status;
 	proto_comm_t *comm = NULL;
 
-	stats = &info->stats;
-	buf = &info->index_cache;
-	session = info->session;
-	hd = info->session_table;
+    gp = (info_global_t *)this->pub_rep;
+    lp = (info_local_t *)module_priv_rep_get(this, sys_thread_id_get());
 
-	if ((info->packet != NULL) && info->packet != data) {
+	hd = gp->session_table;
+	stats = &lp->stats;
+	session = lp->session;
+	buf = &lp->index_cache;
+
+	if ((lp->packet != NULL) && lp->packet != data) {
 		comm = (proto_comm_t *)data;
 
 		packet = comm->packet;
-		assert(packet == info->packet);
+		assert(packet == lp->packet);
 	} else {
 		packet = (packet_t *)data;
 	}
 
-	info->packet = packet;
+	lp->packet = packet;
 
 	if (packet->pktag == parsed_tag) {
 		assert(comm);
-		return __post_parsed(hd, packet, session, comm, info->sf_conf->final_state);
+		return __post_parsed(hd, packet, session, comm, gp->sf_conf->final_state);
 	}
 
 	if (!(packet->prot_types[packet->prot_depth-2] == DPI_PROT_IPV4)) {
@@ -303,7 +330,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
         packet->flag |= PKT_DEBUG;
     }
 
-	hash = info->hash_cb(buf);
+	hash = gp->hash_cb(buf);
 	hash = hash % hd->bucket_num;
 	buf->hash = hash;
 
@@ -327,7 +354,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 			goto failed;
 		}
 	}
-	info->session = session;
+	lp->session = session;
 
 	if (swap_flag) {
 		/*包的ip1和ip2已经交换过了，所以把包的方向换过来*/
@@ -353,11 +380,15 @@ failed:
 
 static void* session_frm_result_get(module_info_t *this)
 {
-	session_frm_info *info = this->resource;
-	info->proto_buf.packet = info->packet;
+	info_local_t *info;
 
+    info = (info_local_t *)module_priv_rep_get(this, sys_thread_id_get());
+    assert(info);
+
+    info->proto_buf.packet = info->packet;
 	assert(info->session);
 	info->proto_buf.state = info->session->app_state;
+    /*FIXME:将流表中的协议特征缓存给下一个引擎处理，这样会导致临界区过大，需要调整*/
 	info->proto_buf.protobuf_head = &info->session->protobuf_head;
 
 	return &info->proto_buf;
@@ -365,7 +396,11 @@ static void* session_frm_result_get(module_info_t *this)
 
 static void session_frm_result_free(module_info_t *this)
 {
-	session_frm_info *info = (session_frm_info *)this->resource;
+    info_local_t *info;
+
+    info = (info_local_t *)module_priv_rep_get(this, sys_thread_id_get());
+    assert(info);
+
 	info->packet = NULL;
 	info->session = NULL;
 }
@@ -387,9 +422,8 @@ static char *__get_ip_protocol_name(uint16_t protocol)
 	return "error";
 }
 
-static void session_item_show(session_frm_info *info)
+static void session_item_show(info_global_t *info, session_frm_stats_t *stats)
 {
-	session_frm_stats_t *stats = &info->stats;
 	hash_table_hd_t *session_table = info->session_table;
 	uint32_t i;
 	char ip0[20], ip1[20];
@@ -464,11 +498,31 @@ static void __session_table_clear(hash_table_hd_t *session_table)
 	}
 }
 
-static int32_t session_frm_fini(module_info_t *this)
+static int32_t session_frm_fini_local(module_info_t *this, uint32_t thread_id)
 {
-	session_frm_info *info = (session_frm_info *)this->resource;
+    info_local_t *info = (info_local_t *)module_priv_rep_get(this, thread_id);
+    if (info) {
+        free(info);
+    }
+    return 0;
+}
 
-	session_item_show(info);
+static int32_t session_frm_fini_global(module_info_t *this)
+{
+    info_global_t *info = (info_global_t *)this->pub_rep;
+    session_frm_stats_t stats;
+    uint32_t i;
+
+    memset(&stats, 0, sizeof(session_frm_stats_t));
+    for(i=0; i<g_conf.thread_num; i++) {
+        info_local_t *info = (info_local_t *)module_priv_rep_get(this, i);
+        stats.unknown_pkts += info->stats.unknown_pkts;
+        stats.unknown_dir += info->stats.unknown_dir;
+        stats.session_count += info->stats.session_count;
+        stats.session_failed += info->stats.session_failed;
+    }
+
+	session_item_show(info, &stats);
 
 	if (info != NULL) {
 		if (info->log_c) {

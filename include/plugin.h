@@ -17,10 +17,11 @@ typedef struct protobuf_node {
 
 typedef struct proto_comm {
 	uint32_t app_id;
+	uint32_t debug;
 	packet_t *packet;
 	uint32_t state;
+    uint32_t thread_id;
 	longmask_t **match_mask;
-	uint32_t debug;
     list_head_t *protobuf_head;/*用于跨包匹配的buf*/
 } proto_comm_t;
 

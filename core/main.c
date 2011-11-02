@@ -1,14 +1,15 @@
 #include <stdio.h>
 #include <assert.h>
 #include <signal.h>
-#include "thread.h"
 
 #include "common.h"
+#include "threadpool.h"
 #include "conf.h"
+#include "sys.h"
 #include "log.h"
 #include "module_manage.h"
-#include "tag_manage.h"
 #include "modules.h"
+#include "tag_manage.h"
 #include "process.h"
 #include "test.h"
 
@@ -22,7 +23,7 @@ volatile int system_exit;
 module_hd_t *module_hd_p;
 log_t *syslog_p;
 #ifdef __linux__
-static struct threadpool tp;
+struct threadpool *tp;
 #endif
 
 void cap_term(int signum)
@@ -46,9 +47,9 @@ static int32_t __sys_init()
 		return -INIT_ERROR;
 	}
 
-    assert(sys_thread_global_init());
+    assert(sys_thread_init_global() == 0);
 
-    tp = threadpool_init(g_conf.thread_num);
+    tp = threadpool_init(g_conf.thread_num, sys_thread_init_local);
     assert(tp);
     return STATUS_OK;
 }
@@ -58,9 +59,11 @@ static int32_t __sys_fini()
 	if (log_fini(&syslog_p) != 0) {
 		return -FINI_ERROR;
 	}
-    if (sys_thread_global_fini() != 0) {
+    if (sys_thread_fini_global() != 0) {
         return -FINI_ERROR;
     }
+
+    threadpool_free(tp, 1);//等待所有worker线程退出
     return STATUS_OK;
 }
 
@@ -91,6 +94,8 @@ static void __tag_fini(tag_hd_t **tag_hd_pp)
 static module_hd_t* __module_init()
 {
 	module_hd_t *module_hd_p;
+    uint32_t i;
+
 	module_hd_p = module_list_create(MAX_MODULE_NUM);
 	assert(module_hd_p);
 	module_list_add(module_hd_p, "recv", &recv_mod_ops);
@@ -119,6 +124,9 @@ static module_hd_t* __module_init()
 
 	assert(module_list_init_global(module_hd_p) == 0);
 
+    for (i=0; i<g_conf.thread_num; i++) {
+        assert(module_list_init_local(module_hd_p, i) == 0);
+    }
 	return module_hd_p;
 }
 
@@ -130,6 +138,14 @@ static void __module_start(module_hd_t *module_hd_p)
 static int32_t __module_fini(module_hd_t **module_hd_pp)
 {
 	int status;
+    module_hd_t *module_hd_p = *module_hd_pp;
+    uint32_t i;
+
+    module_list_fini_global(module_hd_p);
+    for (i=0; i<g_conf.thread_num; i++) {
+        status = module_list_fini_local(module_hd_p, i);
+        if_error_return(status == STATUS_OK, status);
+    }
     status = module_manage_fini(module_hd_pp);
     if_error_return(status == STATUS_OK, status);
 

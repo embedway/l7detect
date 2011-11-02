@@ -12,12 +12,13 @@ typedef struct module_info module_info_t;
 
 typedef struct module_ops {
 	int32_t (*init_global)(module_info_t *this);
-	int32_t (*init_local)(module_info_t *this);
+	int32_t (*init_local)(module_info_t *this, uint32_t thread_id);
     int32_t (*start)(module_info_t *this);
 	int32_t (*process)(module_info_t *this, void *data);
 	void* (*result_get)(module_info_t *this);
 	void (*result_free)(module_info_t *this);
-	int32_t (*fini)(module_info_t *this);
+	int32_t (*fini_global)(module_info_t *this);
+	int32_t (*fini_local)(module_info_t *this, uint32_t thread_id);
 } module_ops_t;
 
 struct module_info {
@@ -68,28 +69,31 @@ int32_t module_list_init_global(module_hd_t *head);
  * 模块本地初始化函数，在所有线程上初始化一次
  *
  * @param head 模块的头指针
+ * @param thread_id 线程id
  *
  * @return 0，成功；其他值，失败原因；
  */
-int32_t module_list_init_local(module_hd_t *head);
+int32_t module_list_init_local(module_hd_t *head, uint32_t thread_id);
 
 /**
  * @brief 获取模块线程私有变量
  *
  * @param module 模块指针
+ * @param thread_id 线程id
  *
  * @return 线程私有变量指针
  */
-void* module_priv_rep_get(module_info_t *module);
+void* module_priv_rep_get(module_info_t *module, uint32_t thread_id);
 
 /**
  * @brief 设置模块线程私有变量的指针指向data
  *
  * @param module 模块指针
+ * @param thread_id 线程id
  * @param data 数据指针
  *
  */
-void module_priv_rep_set(module_info_t *module, void *data);
+void module_priv_rep_set(module_info_t *module, uint32_t thread_id, void *data);
 
 /**
  * 模块启动函数，该函数会按照id的顺序通过回调启动所有注册的模块
@@ -159,13 +163,23 @@ module_info_t *module_info_get_from_id(module_hd_t *head, uint16_t id);
 void module_list_show(module_hd_t *head);
 
 /**
- * 模块退出函数，该函数会通过回调退出所有注册的模块
+ * 模块全局退出函数，该函数会通过回调退出所有注册的模块
  *
  *
  * @param head 模块的头指针
  * @return 0，表示成功；其他值，表示失败原因；
  */
-int32_t module_list_fini(module_hd_t *head);
+int32_t module_list_fini_global(module_hd_t *head);
+
+/**
+ * @brief 模块本地退出函数，该函数会通过回调退出所有注册模块
+ *
+ * @param head_p 模块的头指针
+ * @param thread_id 线程id
+ *
+ * @return 0，表示成功；其他值，表示失败原因；
+ */
+int32_t module_list_fini_local(module_hd_t *head_p, uint32_t thread_id);
 
 /**
  * 模块管理退出函数，同时会退出所有没有退出的模块

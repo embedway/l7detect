@@ -78,7 +78,7 @@ int32_t module_list_init_global(module_hd_t *head_p)
 	return STATUS_OK;
 }
 
-int32_t module_list_init_local(module_hd_t *head_p)
+int32_t module_list_init_local(module_hd_t *head_p, uint32_t thread_id)
 {
 	int i;
 	int status;
@@ -90,23 +90,21 @@ int32_t module_list_init_local(module_hd_t *head_p)
 
 	for (i=1; i<(int)head_p->module_valid + 1; i++) {
 		if ((modules[i].ops != NULL) && (modules[i].ops->init_local != NULL)) {
-			status = modules[i].ops->init_local(&modules[i]);
+			status = modules[i].ops->init_local(&modules[i], thread_id);
 			assert(status == 0);
 		}
 	}
 	return STATUS_OK;
 }
 
-void* module_priv_rep_get(module_info_t *module)
+void* module_priv_rep_get(module_info_t *module, uint32_t thread_id)
 {
-    uint32_t thread_id = sys_thread_id_get();
     assert(thread_id < MAX_WORKER_THREAD);
-    return &module->priv_rep[thread_id];
+    return module->priv_rep[thread_id];
 }
 
-void module_priv_rep_set(module_info_t *module, void *data)
+void module_priv_rep_set(module_info_t *module, uint32_t thread_id, void *data)
 {
-    uint32_t thread_id = sys_thread_id_get();
     assert(thread_id < MAX_WORKER_THREAD);
     module->priv_rep[thread_id] = data;
 }
@@ -261,7 +259,7 @@ void module_list_show(module_hd_t *head_p)
 	}
 }
 
-int32_t module_list_fini(module_hd_t *head_p)
+int32_t module_list_fini_global(module_hd_t *head_p)
 {
 	int i, valid;
 	int status;
@@ -272,12 +270,13 @@ int32_t module_list_fini(module_hd_t *head_p)
 		if (modules != NULL) {
 			valid = head_p->module_valid;
 			for (i=(int)valid; i>=1; i--) {
-				if ((modules[i].ops != NULL) && (modules[i].ops->fini != NULL)) {
+				if ((modules[i].ops != NULL) && (modules[i].ops->fini_global != NULL)) {
 					log_notice(syslog_p, "fini module %s\n", modules[i].name);
 					modules[i].flags |= MODULE_QUIT;
-					status = modules[i].ops->fini(&modules[i]);
+					status = modules[i].ops->fini_global(&modules[i]);
 					if (status != 0) {
-						log_notice(syslog_p, "module %s fini status %d\n", modules[i].name, status);
+						log_notice(syslog_p, "module %s fini status %d\n",
+                                    modules[i].name, status);
 					}
 					head_p->module_valid--;
 				}
@@ -287,13 +286,40 @@ int32_t module_list_fini(module_hd_t *head_p)
 	return STATUS_OK;
 }
 
+int32_t module_list_fini_local(module_hd_t *head_p, uint32_t thread_id)
+{
+	int i, valid;
+	int status;
+	module_info_t *modules;
+
+	if (head_p != NULL) {
+		modules = head_p->module_info;
+		if (modules != NULL) {
+			valid = head_p->module_valid;
+			for (i=(int)valid; i>=1; i--) {
+				if ((modules[i].ops != NULL) && (modules[i].ops->fini_local != NULL)) {
+					log_notice(syslog_p, "fini module local %s on thread %d\n", modules[i].name, thread_id);
+					modules[i].flags |= MODULE_QUIT;
+					status = modules[i].ops->fini_local(&modules[i], thread_id);
+					if (status != 0) {
+						log_notice(syslog_p, "module %s fini status %d on thread %d\n",
+                                    modules[i].name, status, thread_id);
+					}
+					head_p->module_valid--;
+				}
+			}
+		}
+	}
+	return STATUS_OK;
+}
+
+
 int32_t module_manage_fini(module_hd_t **head_pp)
 {
 	module_info_t *modules;
 	module_hd_t *head_p = *head_pp;
 
-	module_list_fini(head_p);
-	if (head_p != NULL) {
+    if (head_p != NULL) {
 		modules = head_p->module_info;
 		if (modules != NULL) {
 			free(modules);

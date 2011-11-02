@@ -1,8 +1,9 @@
 #ifndef __LOG_H__
 #define __LOG_H__
 
+#include <stdio.h>
 #include "common.h"
-#include "stdio.h"
+#include "lock.h"
 
 enum {
 	EMERG,
@@ -17,6 +18,7 @@ enum {
 
 typedef struct {
 	int fd;
+    spinlock_t lock;
 	uint32_t level;
 } log_t;
 

@@ -30,7 +30,7 @@ static void __proto_conf_show(sf_proto_conf_t *conf);
 
 static void __usage(char *prog_name)
 {
-	print("%s [-i ifname] [-r capfile] [-l logfile] [-p protofile]\n", prog_name);
+	print("%s [-i ifname] [-r capfile] [-l logfile] [-n worker_thread_num] [-p protofile]\n", prog_name);
 	exit (-1);
 }
 
@@ -43,7 +43,7 @@ static void __init_default_config()
 static int __parse_args(int argc, char *argv[])
 {
 	int opt;
-	while ((opt = getopt(argc, argv, "i:r:l:h")) > 0) {
+	while ((opt = getopt(argc, argv, "i:r:l:n:h")) > 0) {
 		switch (opt) {
 		case 'i':
 			g_conf.mode = MODE_LIVE;

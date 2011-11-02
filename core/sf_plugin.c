@@ -9,52 +9,58 @@
 
 #include "common.h"
 #include "log.h"
+#include "sys.h"
 #include "conf.h"
 #include "module_manage.h"
 #include "sf_plugin.h"
 #include "plugin.h"
 #include "process.h"
 
-static int32_t sf_plugin_init(module_info_t *this);
+static int32_t sf_plugin_init_global(module_info_t *this);
+static int32_t sf_plugin_init_local(module_info_t *this, uint32_t thread_id);
 static int32_t sf_plugin_process(module_info_t *this, void *data);
-static int32_t sf_plugin_fini(module_info_t *this);
+static int32_t sf_plugin_fini_global(module_info_t *this);
+static int32_t sf_plugin_fini_local(module_info_t *this, uint32_t thread_id);
 static void *sf_plugin_result_get(module_info_t *this);
+
 static uint16_t parsed_tag;
 #define MAX_STRING_LEN 80
 
 module_ops_t sf_plugin_ops = {
-	.init = sf_plugin_init,
-	.process = sf_plugin_process,
+	.init_global = sf_plugin_init_global,
+	.init_local = sf_plugin_init_local,
+    .process = sf_plugin_process,
 	.result_get = sf_plugin_result_get,
-	.fini = sf_plugin_fini,
+	.fini_global = sf_plugin_fini_global,
+    .fini_local = sf_plugin_fini_local,
 };
 
-typedef struct sf_plugin_info {
+typedef struct info_global {
 	uint32_t plugin_num;
 	void **handle;
 	module_hd_t *plugin;
 	tag_hd_t *tag;
 	sf_proto_conf_t *pconf;
-	proto_comm_t proto_comm;
-} sf_plugin_info_t;
+} info_global_t;
 
-static int32_t sf_plugin_init(module_info_t *this)
+typedef struct info_local {
+	proto_comm_t proto_comm;
+} info_local_t;
+
+static int32_t sf_plugin_init_global(module_info_t *this)
 {
 	module_ops_t *ops;
-	sf_plugin_info_t *info;
+	info_global_t *info;
 	char filename[MAX_STRING_LEN];
 	char opsname[MAX_STRING_LEN];
 	uint32_t i;
 	module_info_t *plugin_info;
 	int32_t status;
 	sf_proto_conf_t *pconf;
-	proto_comm_t *proto_comm;
 
-
-	info = zmalloc(sf_plugin_info_t *, sizeof(sf_plugin_info_t));
+	info = zmalloc(info_global_t *, sizeof(info_global_t));
 	assert(info);
 
-	this->resource = info;
 	pconf = conf_module_config_search(SF_PROTO_CONF_NAME, NULL);
 	assert(pconf);
 
@@ -104,9 +110,28 @@ static int32_t sf_plugin_init(module_info_t *this)
 		plugin_info = module_info_get_from_name(info->plugin, pconf->engines[i].name);
 		assert(plugin_info);
 		pconf->proto_log = syslog_p;
-		plugin_info->resource = pconf;
+        plugin_info->pub_rep = (void *)pconf;
 	}
+	this->pub_rep = info;
+	parsed_tag = tag_id_get_from_name(pktag_hd_p, "parsed");
+	module_list_init_global(info->plugin);
 
+	return 0;
+}
+
+static int32_t sf_plugin_init_local(module_info_t *this, uint32_t thread_id)
+{
+    info_local_t *info;
+    info_global_t *gp;
+    proto_comm_t *proto_comm;
+    sf_proto_conf_t *pconf;
+    uint32_t i;
+
+    info = zmalloc(info_local_t *, sizeof(info_local_t));
+	assert(info);
+
+    gp = this->pub_rep;
+    pconf = gp->pconf;
 	proto_comm = &info->proto_comm;
 	proto_comm->match_mask = zmalloc(longmask_t **, sizeof(longmask_t *) * pconf->total_engine_num);
 	assert(proto_comm->match_mask);
@@ -116,29 +141,33 @@ static int32_t sf_plugin_init(module_info_t *this)
 		assert(proto_comm->match_mask[i]);
 	}
 
-	parsed_tag = tag_id_get_from_name(pktag_hd_p, "parsed");
-	module_list_init(info->plugin);
+    module_priv_rep_set(this, thread_id, (void *)info);
 
-	return 0;
+    gp = this->pub_rep;
+    module_list_init_local(gp->plugin, thread_id);
+    return 0;
 }
 
 static int32_t sf_plugin_process(module_info_t *this, void *data)
 {
-	sf_plugin_info_t *info;
+    info_global_t *gp;
+	info_local_t *lp;
 	proto_comm_t *session_comm, *proto_comm;
 	sf_proto_conf_t *pconf;
 	uint32_t i;
 	packet_t *packet;
 	int32_t init_tag = 0;
 
+    gp = this->pub_rep;
+    lp = (info_local_t *)module_priv_rep_get(this, sys_thread_id_get());
 	session_comm = (proto_comm_t *)data;
 	packet = (packet_t *)session_comm->packet;
-	info = (sf_plugin_info_t *)this->resource;
-	pconf = info->pconf;
-	proto_comm = &info->proto_comm;
+	pconf = gp->pconf;
+	proto_comm = &lp->proto_comm;
 
-	proto_comm->packet = packet;
+    proto_comm->packet = packet;
 	proto_comm->app_id = INVALID_PROTO_ID;
+    proto_comm->thread_id = sys_thread_id_get();
 	proto_comm->state = session_comm->state;
 	proto_comm->protobuf_head = session_comm->protobuf_head;
 	if (!list_empty(session_comm->protobuf_head)) {
@@ -160,8 +189,8 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 		}
 		init_tag = -1;
 	}
-	if (info->plugin_num) {
-		module_list_process(info->plugin, info->tag, init_tag, proto_comm);
+	if (gp->plugin_num) {
+		module_list_process(gp->plugin, gp->tag, init_tag, proto_comm);
 	}
 
 	if (proto_comm->app_id != INVALID_PROTO_ID) {
@@ -174,23 +203,40 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 
 static void *sf_plugin_result_get(module_info_t *this)
 {
-	sf_plugin_info_t *info;
+	info_local_t *info;
 
-	info = (sf_plugin_info_t *)this->resource;
+    info = (info_local_t *)module_priv_rep_get(this, sys_thread_id_get());
 	return &info->proto_comm;
 }
 
-static int32_t sf_plugin_fini(module_info_t *this)
+static int32_t sf_plugin_fini_local(module_info_t *this, uint32_t thread_id)
+{
+    uint32_t i;
+    info_global_t *gp;
+    info_local_t *info;
+    sf_proto_conf_t *pconf;
+
+    gp = (info_global_t *)this->pub_rep;
+    info = (info_local_t *)module_priv_rep_get(this, thread_id);
+
+    pconf = gp->pconf;
+
+    for (i=0; i<pconf->total_engine_num; i++) {
+		longmask_destroy(info->proto_comm.match_mask[i]);
+	}
+	free(info->proto_comm.match_mask);
+    return 0;
+}
+
+static int32_t sf_plugin_fini_global(module_info_t *this)
 {
 	uint32_t i;
-	sf_plugin_info_t *info;
-	sf_proto_conf_t *pconf;
+	info_global_t *info;
 
-	info = (sf_plugin_info_t *)this->resource;
+	info = (info_global_t *)this->pub_rep;
 	module_manage_fini(&info->plugin);
 	tag_fini(&info->tag);
 
-	pconf = info->pconf;
 	for (i=0; i<info->plugin_num; i++) {
 		if (info->handle[i] != NULL) {
 			log_notice(syslog_p, "plugin  %p close\n", info->handle[i]);
@@ -198,11 +244,7 @@ static int32_t sf_plugin_fini(module_info_t *this)
 		}
 	}
 	free(info->handle);
-	for (i=0; i<pconf->total_engine_num; i++) {
-		longmask_destroy(info->proto_comm.match_mask[i]);
-	}
-	free(info->proto_comm.match_mask);
-	free(info);
+    free(info);
 
 	return 0;
 }

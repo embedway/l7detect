@@ -10,11 +10,14 @@ log_t *log_init(char *file, uint32_t level)
 {
 	FILE *fp;
 	log_t *log_p;
+    int status;
 
 	log_p = (log_t *)malloc(sizeof(log_t));
 	assert(log_p != NULL);
-	
+
 	log_p->level = level;
+    status = spin_init(&log_p->lock, 0);
+    assert(status == 0);
 
 	if (file == NULL) {
 		fp = stdout;
@@ -34,7 +37,7 @@ int32_t log_log(log_t *log_p, uint32_t level, const char * fmt, ...)
 	char *head = "<%d> ";
 	char *p, *end;
 	int n = 0;
-	
+
 	assert(log_p != NULL);
 
 	if (log_p->level >= level) {
@@ -43,11 +46,13 @@ int32_t log_log(log_t *log_p, uint32_t level, const char * fmt, ...)
 		va_start(ap, fmt);
 		n = snprintf(p, strlen(head), head, level);
 		p += n;
-		
+
 		n = vsnprintf(p, end-p, fmt, ap);
+        spin_lock(&log_p->lock);
 		n = write(log_p->fd, buffer, strlen(head) + n - 1);
-		va_end(ap);
-	} 
+        spin_unlock(&log_p->lock);
+        va_end(ap);
+	}
 	return n;
 }
 
@@ -57,13 +62,13 @@ int32_t log_print(log_t *log_p, const char * fmt, ...)
 	va_list ap;
 	char *p, *end;
 	int n = 0;
-	
+
 	assert(log_p != NULL);
 
 	p = buffer;
 	end = buffer + sizeof(buffer);
 	va_start(ap, fmt);
-	
+
 	n = vsnprintf(p, end-p, fmt, ap);
 	n = write(log_p->fd, buffer, n);
 	va_end(ap);

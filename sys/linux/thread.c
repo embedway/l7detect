@@ -1,5 +1,5 @@
 #include <pthread.h>
-
+#include <stdio.h>
 #include "common.h"
 #include "thread.h"
 #include "lock.h"
@@ -11,6 +11,7 @@ static spinlock_t lock;
 
 uint32_t thread_init_global()
 {
+    pthread_key_create(&key, NULL);
     spin_init(&lock, 0);
     return 0;
 }
@@ -24,7 +25,6 @@ uint32_t thread_init_local()
     my_id = core_num;
     core_num++;
     spin_unlock(&lock);
-    pthread_key_create(&key, NULL);
     pthread_setspecific(key, &core_id[my_id]);
     return 0;
 }

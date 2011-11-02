@@ -9,21 +9,22 @@
 #include "common.h"
 #include "mem.h"
 #include "module_manage.h"
+#include "log.h"
+#include "helper.h"
+#include "sys.h"
 #include "conf.h"
 #include "parser.h"
-#include "log.h"
 #include "process.h"
 #include "decap.h"
-#include "helper.h"
 
 #define PKTS_MAX_NUM 10
 #define PKTS_MAX_LEN MAX_PACKET_LEN
 
-static int32_t decap_init(module_info_t *this);
+static int32_t decap_init_global(module_info_t *this);
+static int32_t decap_init_local(module_info_t *this, uint32_t thread_id);
 static int32_t decap_process(module_info_t *this, void *data);
-static void* decap_result_get(module_info_t *this);
-static void decap_result_free(module_info_t *this);
-static int decap_fini(module_info_t *this);
+static int decap_fini_global(module_info_t *this);
+static int decap_fini_local(module_info_t *this, uint32_t thread_id);
 
 static uint16_t ipv4_frag_tag;
 static uint16_t tcp_tag;
@@ -47,7 +48,7 @@ enum {
 	MALFORMED_PKTS,
 } cap_code;
 
-typedef struct decap_info {
+typedef struct info_local {
 	packet_t *packet;
 	decap_stats_t stats;
 	struct cap_info {
@@ -56,18 +57,20 @@ typedef struct decap_info {
 		uint32_t code;
 	} cap_pkts[PKTS_MAX_NUM];
 	uint8_t cap_num;
-} decap_info_t;
+} info_local_t;
 
 module_ops_t decap_mod_ops = {
-	.init = decap_init,
+    .init_global = decap_init_global,
+	.init_local = decap_init_local,
 	.start = NULL,
 	.process = decap_process,
-	.result_get = decap_result_get,
-	.result_free = decap_result_free,
-	.fini = decap_fini,
+	.result_get = NULL,
+	.result_free = NULL,
+	.fini_global = decap_fini_global,
+	.fini_local = decap_fini_local,
 };
 
-static inline void __pkts_cap(decap_info_t *info, uint32_t code)
+static inline void __pkts_cap(info_local_t *info, uint32_t code)
 {
 	if (info->cap_num < PKTS_MAX_NUM) {
 		memcpy(info->cap_pkts[info->cap_num].pkts_cap, info->packet->data, info->packet->len);
@@ -77,7 +80,7 @@ static inline void __pkts_cap(decap_info_t *info, uint32_t code)
 	}
 }
 
-static inline void __pkts_dump(decap_info_t *info)
+static inline void __pkts_dump(info_local_t *info)
 {
 	int i;
 	for (i=0; i<info->cap_num; i++) {
@@ -87,19 +90,23 @@ static inline void __pkts_dump(decap_info_t *info)
 								 info->cap_pkts[i].pkts_len, FORMAT_PRINT_WITH_HEAD);
 		log_print(syslog_p, "\n");
 	}
-
 }
 
-static int32_t decap_init(module_info_t *this)
+static int32_t decap_init_global(module_info_t *this)
 {
-	this->resource = (decap_info_t *)malloc(sizeof(decap_info_t));
-	assert(this->resource);
-
-	memset(this->resource, 0, sizeof(decap_info_t));
-	ipv4_frag_tag = tag_id_get_from_name(pktag_hd_p, "ipv4_frag");
+    ipv4_frag_tag = tag_id_get_from_name(pktag_hd_p, "ipv4_frag");
 	tcp_tag = tag_id_get_from_name(pktag_hd_p, "tcp");
 	udp_tag = tag_id_get_from_name(pktag_hd_p, "udp");
-	return 0;
+
+    return 0;
+}
+
+static int32_t decap_init_local(module_info_t *this, uint32_t thread_id)
+{
+    info_local_t *info = zmalloc(info_local_t *, sizeof(info_local_t));
+	assert(info);
+    module_priv_rep_set(this, thread_id, (void *)info);
+    return 0;
 }
 
 static int32_t decap_process(module_info_t *this, void *data)
@@ -117,10 +124,13 @@ static int32_t decap_process(module_info_t *this, void *data)
 	int mpls_layer;
 	uint16_t ether_type;
 	uint8_t first_nibble;
-	decap_info_t *info = (decap_info_t *)(this->resource);
-	decap_stats_t *stats = &info->stats;
+	info_local_t *info;
+	decap_stats_t *stats;
 	uint8_t ip_protocol;
 
+    info = (info_local_t *)module_priv_rep_get(this, sys_thread_id_get());
+    assert(info);
+    stats = &info->stats;
 	switch (packet->prot_types[packet->prot_depth-1]) {
 	case DPI_PROT_ETHER:
         goto do_decap_ether;
@@ -131,7 +141,6 @@ static int32_t decap_process(module_info_t *this, void *data)
 	default:
 		goto unknown_pkts;
 	}
-
 do_decap_ether:
 	info->packet = packet;
 	ether =  (dpi_ether_hdr_t *)ptr;
@@ -286,41 +295,52 @@ unknown_pkts:
 	return 0;
 }
 
-static void* decap_result_get(module_info_t *this)
+static int decap_fini_global(module_info_t *this)
 {
-	decap_info_t *info = (decap_info_t *)(this->resource);
-	return info->packet;
-}
+	decap_stats_t stats;
+    uint32_t i;
 
-static void decap_result_free(module_info_t *this)
-{
-	decap_info_t *info = (decap_info_t *)(this->resource);
-	info->packet = NULL;
-}
-
-static int decap_fini(module_info_t *this)
-{
-	decap_info_t *info = (decap_info_t *)(this->resource);
-	decap_stats_t *stats = &info->stats;
+    memset(&stats, 0, sizeof(decap_stats_t));
+    for (i=0; i<g_conf.thread_num; i++) {
+        info_local_t *info = (info_local_t *)module_priv_rep_get(this, i);
+        stats.ipv4_frag_pkts += info->stats.ipv4_frag_pkts;
+        stats.ipv6_frag_pkts += info->stats.ipv6_frag_pkts;
+        stats.ipv6_pkts += info->stats.ipv6_pkts;
+        stats.icmp_pkts += info->stats.icmp_pkts;
+        stats.arp_pkts += info->stats.arp_pkts;
+        stats.tcp_pkts += info->stats.tcp_pkts;
+        stats.udp_pkts += info->stats.udp_pkts;
+        stats.malformed_pkts += info->stats.malformed_pkts;
+        stats.unknown_pkts += info->stats.unknown_pkts;
+    }
 
 	log_notice(syslog_p, "\n------------------decapinfo---------------\n");
-	log_notice(syslog_p, "ipv4_frag_pkts=%llu\n", stats->ipv4_frag_pkts);
-	log_notice(syslog_p, "ipv6_frag_pkts=%llu\n", stats->ipv6_frag_pkts);
-	log_notice(syslog_p, "ipv6_pkts=%llu\n", stats->ipv6_pkts);
-	log_notice(syslog_p, "icmp_pkts=%llu\n", stats->icmp_pkts);
-	log_notice(syslog_p, "arp_pkts=%llu\n", stats->arp_pkts);
-	log_notice(syslog_p, "tcp_pkts=%llu\n", stats->tcp_pkts);
-	log_notice(syslog_p, "udp_pkts=%llu\n", stats->udp_pkts);
-	log_notice(syslog_p, "malformed_pkts=%llu\n", stats->malformed_pkts);
-	log_notice(syslog_p, "unknown_pkts=%llu\n", stats->unknown_pkts);
+	log_notice(syslog_p, "ipv4_frag_pkts=%llu\n", stats.ipv4_frag_pkts);
+	log_notice(syslog_p, "ipv6_frag_pkts=%llu\n", stats.ipv6_frag_pkts);
+	log_notice(syslog_p, "ipv6_pkts=%llu\n", stats.ipv6_pkts);
+	log_notice(syslog_p, "icmp_pkts=%llu\n", stats.icmp_pkts);
+	log_notice(syslog_p, "arp_pkts=%llu\n", stats.arp_pkts);
+	log_notice(syslog_p, "tcp_pkts=%llu\n", stats.tcp_pkts);
+	log_notice(syslog_p, "udp_pkts=%llu\n", stats.udp_pkts);
+	log_notice(syslog_p, "malformed_pkts=%llu\n", stats.malformed_pkts);
+	log_notice(syslog_p, "unknown_pkts=%llu\n", stats.unknown_pkts);
 
 	log_notice(syslog_p, "\n------------------decap packet info---------------\n");
-	__pkts_dump(info);
-
+    for (i=0; i<g_conf.thread_num; i++) {
+        info_local_t *info = (info_local_t *)module_priv_rep_get(this, i);
+	    __pkts_dump(info);
+    }
 	log_notice(syslog_p, "\n");
+    return 0;
+}
+
+static int32_t decap_fini_local(module_info_t *this, uint32_t thread_id)
+{
+    info_local_t *info;
+
+    info = (info_local_t *)module_priv_rep_get(this, thread_id);
 	if (info) {
 		free(info);
 	}
-	return 0;
+    return 0;
 }
-
