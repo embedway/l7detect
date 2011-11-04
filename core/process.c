@@ -61,6 +61,10 @@ void process_loop(module_hd_t *module_head)
                 status = tag_id;
             }
         } while( status >= 0 && !system_exit);
+        if (g_conf.mode == MODE_FILE) {
+            sleep(1);/*等待最后加入的work处理完成*/
+        }
+
     } else if (g_conf.mode == MODE_SE) {
         do {
             status = module_list_process(module_head, pktag_hd_p, -1, NULL);
