@@ -47,24 +47,32 @@ static int32_t __sys_init()
 		return -INIT_ERROR;
 	}
 
-    assert(sys_thread_init_global() == 0);
-
-    tp = threadpool_init(g_conf.thread_num, sys_thread_init_local);
-    assert(tp);
-    return STATUS_OK;
+   return STATUS_OK;
 }
 
 static int32_t __sys_fini()
 {
-	if (log_fini(&syslog_p) != 0) {
+    if (log_fini(&syslog_p) != 0) {
 		return -FINI_ERROR;
 	}
+    return STATUS_OK;
+}
+static int32_t __thread_init()
+{
+    assert(sys_thread_init_global() == 0);
+
+    tp = threadpool_init(g_conf.thread_num, sys_thread_init_local);
+    assert(tp);
+    return 0;
+}
+
+static int32_t __thread_fini()
+{
+    threadpool_free(tp, 1);//等待所有worker线程退出
     if (sys_thread_fini_global() != 0) {
         return -FINI_ERROR;
     }
-
-    threadpool_free(tp, 1);//等待所有worker线程退出
-    return STATUS_OK;
+    return 0;
 }
 
 static tag_hd_t* __tag_init()
@@ -166,8 +174,10 @@ int main(int argc, char *argv[])
 
 /*初始化*/
 	assert(__sys_init() == 0);
-
 	log_notice(syslog_p, "sys init OK!\n");
+
+    assert(__thread_init() == 0);
+    log_notice(syslog_p, "thread init OK!\n");
 
 	pktag_hd_p  = __tag_init();
 	assert(pktag_hd_p);
@@ -178,10 +188,15 @@ int main(int argc, char *argv[])
 
     __module_start(module_hd_p);
 	log_notice(syslog_p, "module init OK!\n");
-
 /*开始处理*/
 	process_loop(module_hd_p);
 /*处理结束*/
+    if (__thread_fini() == 0) {
+        log_notice(syslog_p, "thread exit OK!\n");
+    } else {
+        log_notice(syslog_p, "thread exit error!\n");
+    }
+    process_fini();
 	if (__module_fini(&module_hd_p) != 0) {
 		log_error(syslog_p, "Some module finish error...\n");
 	} else {
@@ -191,12 +206,14 @@ int main(int argc, char *argv[])
 	__tag_fini(&pktag_hd_p);
 	log_notice(syslog_p, "tag safe exit...\n");
 
-	if ((status = __sys_fini()) != 0) {
+   	conf_fini();
+
+    if ((status = __sys_fini()) != 0) {
 		print("sys fin status %d\n", status);
 	} else {
 		print("sys exit OK\n");
 	}
-	conf_fini();
+
 
 	return 0;
 }

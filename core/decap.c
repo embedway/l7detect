@@ -141,6 +141,7 @@ static int32_t decap_process(module_info_t *this, void *data)
 	default:
 		goto unknown_pkts;
 	}
+
 do_decap_ether:
 	info->packet = packet;
 	ether =  (dpi_ether_hdr_t *)ptr;
@@ -217,7 +218,6 @@ do_decap_ipv4:
 		packet->pktag = tag;
 		return tag;
     }
-
 	ptr += ipv4->hdr_len * 4;
 	ip_protocol = ipv4->protocol;
 	packet->real_applen = ntohs(ipv4->length) - ipv4->hdr_len * 4;

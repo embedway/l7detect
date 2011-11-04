@@ -278,7 +278,6 @@ int32_t module_list_fini_global(module_hd_t *head_p)
 						log_notice(syslog_p, "module %s fini status %d\n",
                                     modules[i].name, status);
 					}
-					head_p->module_valid--;
 				}
 			}
 		}
@@ -297,15 +296,14 @@ int32_t module_list_fini_local(module_hd_t *head_p, uint32_t thread_id)
 		if (modules != NULL) {
 			valid = head_p->module_valid;
 			for (i=(int)valid; i>=1; i--) {
+			//log_notice(syslog_p, "fini module local %s on thread %d\n", modules[i].name, thread_id);
 				if ((modules[i].ops != NULL) && (modules[i].ops->fini_local != NULL)) {
-					log_notice(syslog_p, "fini module local %s on thread %d\n", modules[i].name, thread_id);
 					modules[i].flags |= MODULE_QUIT;
 					status = modules[i].ops->fini_local(&modules[i], thread_id);
 					if (status != 0) {
 						log_notice(syslog_p, "module %s fini status %d on thread %d\n",
                                     modules[i].name, status, thread_id);
 					}
-					head_p->module_valid--;
 				}
 			}
 		}

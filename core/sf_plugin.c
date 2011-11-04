@@ -197,7 +197,7 @@ static int32_t sf_plugin_process(module_info_t *this, void *data)
 		packet->app_type = proto_comm->app_id;
 	}
 	packet->pktag = parsed_tag;
-
+/*sf_plugin必须要再次回到会话模块，不能直接退出，否则将会导致有的会话一直处于dirty状态，导致死循环*/
 	return packet->pktag;
 }
 
@@ -239,13 +239,12 @@ static int32_t sf_plugin_fini_global(module_info_t *this)
 
 	for (i=0; i<info->plugin_num; i++) {
 		if (info->handle[i] != NULL) {
-			log_notice(syslog_p, "plugin  %p close\n", info->handle[i]);
+			log_notice(syslog_p, "plugin %p close\n", info->handle[i]);
 			dlclose(info->handle[i]);
 		}
 	}
 	free(info->handle);
     free(info);
-
 	return 0;
 }
 

@@ -4,14 +4,12 @@
 #include <stdlib.h>
 
 #include "common.h"
-#include "mem.h"
 #include "module_manage.h"
 #include "conf.h"
 #include "parser.h"
 #include "log.h"
 #include "process.h"
 
-#define MAX_PACKET_HANDLE 200
 
 typedef struct pcap_stats {
 	uint64_t good_pkts;
@@ -22,8 +20,6 @@ typedef struct pcap_stats {
 
 typedef struct info_global {
 	pcap_t *pcap;
-	zone_t *zone;
-    packet_t *packet;
 	pcap_stats_t stats;
 } info_global_t;
 
@@ -31,8 +27,6 @@ typedef struct info_global {
 static int32_t pcap_read_init_global(module_info_t *this);
 //static int32_t pcap_read_init_local(module_info_t *this, uint32_t thread_id);
 static int32_t pcap_read_process(module_info_t *this, void *data);
-static void* pcap_read_result_get(module_info_t *this);
-static void pcap_read_result_free(module_info_t *this);
 static int pcap_read_fini_global(module_info_t *this);
 //static int pcap_read_fini_local(module_info_t *this, uint32_t thread_id);
 static int16_t tag_decap;
@@ -42,8 +36,8 @@ module_ops_t pcap_read_ops = {
     .init_local = NULL,
 	.start = NULL,
 	.process = pcap_read_process,
-	.result_get = pcap_read_result_get,
-	.result_free = pcap_read_result_free,
+	.result_get = NULL,
+	.result_free = NULL,
 	.fini_global = pcap_read_fini_global,
     .fini_local = NULL,
 };
@@ -60,9 +54,6 @@ static int32_t pcap_read_init_global(module_info_t *this)
 
 	p->pcap = pcap_open_offline(g_conf.u.capfile, ebuf);
 	assert(p->pcap);
-
-	p->zone = zone_init("pcap_read", sizeof(packet_t) + MAX_PACKET_LEN, MAX_PACKET_HANDLE);
-	assert(p->zone);
 
 	tag_decap = tag_id_get_from_name(pktag_hd_p, "decap");
 
@@ -92,50 +83,18 @@ static int32_t pcap_read_process(module_info_t *this, void *data)
 	if (ptr == NULL) {
 		return -1;
 	}
-
-	assert(!p->packet);
-
-	packet = zone_alloc(p->zone, 0);
-	if (packet == NULL) {
-		p->stats.drop_pkts++;
-		log_error(syslog_p, "no space error!\n");
-		return 0;
-	}
-
-	p->packet = packet;
-
+	packet = (packet_t *)data;
 	__packet_init(packet);
 	packet->len = hdr.caplen;
 	if (packet->len >= MAX_PACKET_LEN) {
 		p->stats.oversize_pkts++;
 		packet->len = MAX_PACKET_LEN;
 	}
-
 	packet->data = (void *)packet + sizeof(packet_t);
 	memcpy(packet->data, ptr, packet->len);
 	p->stats.good_pkts++;
 	packet->pktag = tag;
 	return tag;
-}
-
-static void* pcap_read_result_get(module_info_t *this)
-{
-	info_global_t *p = (info_global_t *)(this->pub_rep);
-	if (p != NULL) {
-		return p->packet;
-	}
-	return NULL;
-}
-
-static void pcap_read_result_free(module_info_t *this)
-{
-	if (this->pub_rep != NULL) {
-		info_global_t *p = this->pub_rep;
-		if (p->packet) {
-			zone_free(p->zone, p->packet);
-			p->packet = NULL;
-		}
-	}
 }
 
 static int pcap_read_fini_global(module_info_t *this)
@@ -148,13 +107,8 @@ static int pcap_read_fini_global(module_info_t *this)
 	log_notice(syslog_p, "    Drop packets    :%d\n", p->stats.drop_pkts);
 	log_notice(syslog_p, "    Oversize packets:%d\n", p->stats.drop_pkts);
 
-	if (p->zone) {
-		zone_fini(p->zone);
-		p->zone = NULL;
-	}
 	pcap_close(p->pcap);
 	p->pcap = NULL;
-	p->packet = NULL;
 	free(p);
 	log_notice(syslog_p, "    pcap_read module finish OK\n");
 	return 0;

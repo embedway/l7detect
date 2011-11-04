@@ -69,13 +69,14 @@ typedef struct session_index {
 typedef struct session_item {
 	session_index_t index;
 	flow_item_t flow[2];		/**< [0]为上行流，[1]为下行流 */
-	uint16_t dir:2;
 #define FLOW_UP_STREAM_INDEX 0
 #define FLOW_DN_STREAM_INDEX 1
-	uint16_t flag:14;
+	uint16_t dir:2;
 #define SESSION_INDEX_UPSTREAM PKT_DIR_UPSTREAM
 #define SESSION_INDEX_DNSTREAM PKT_DIR_DNSTREAM
 #define SESSION_DIR_MASK 0x3
+#define SESSION_DIRTY 0x10
+	uint16_t flag:14;
 	uint16_t stage;
 	uint64_t id;
 	uint64_t start_time;
@@ -187,7 +188,8 @@ static inline uint32_t __post_parsed(hash_table_hd_t *hd, packet_t* packet, sess
 		session->app_state = comm->state;
 		/*mask在sf_plugin模块中已经被修改*/
 	}
-	hash_table_unlock(hd, session->index.hash, 0);
+    session->flag &= ~SESSION_DIRTY;
+    hash_table_unlock(hd, session->index.hash, 0);
 	packet->pktag = next_stage_tag;
 	return packet->pktag;
 }
@@ -326,9 +328,6 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 		swap(buf->port[0], buf->port[1]);
 		swap_flag = 1;
 	}
-    if (buf->ip[0] == 0xac11341B || buf->ip[1] == 0xac11341B) {
-        packet->flag |= PKT_DEBUG;
-    }
 
 	hash = gp->hash_cb(buf);
 	hash = hash % hd->bucket_num;
@@ -353,7 +352,10 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 			log_error(syslog_p, "new session insert error, status=%d\n", status);
 			goto failed;
 		}
-	}
+	} else if (session->flag & SESSION_DIRTY) {
+        /*当前会话正在处理，立即返回到队列中，等待下次处理*/
+       /*还没有实现，有待改进*/
+    }
 	lp->session = session;
 
 	if (swap_flag) {
@@ -364,6 +366,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	}
 
 	__update_session_count(session, packet);
+    session->flag |= SESSION_DIRTY;
 	hash_table_unlock(hd, hash, 0);
 	if ((session->app_type != INVALID_PROTO_ID)) {
 		/*app length is 0*/

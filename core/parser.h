@@ -14,6 +14,9 @@ typedef struct packet {
 #define PKT_DIR_DNSTREAM 0x2
 #define PKT_DIR_MASK 0x3
 #define PKT_DEBUG 0x1000000000000000
+#define PKT_HANDLE_MASK 0xf0ull
+#define PKT_DONT_FREE 0x10ull
+#define PKT_LOOP_NEXT 0x20ull
     uint64_t flag:62;/*其他标志*/
 	uint32_t pktag;
 	uint8_t prot_types[MAX_PARSER_DEPTH];
