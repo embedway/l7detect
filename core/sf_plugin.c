@@ -44,6 +44,7 @@ typedef struct info_global {
 } info_global_t;
 
 typedef struct info_local {
+    sf_proto_conf_t *pconf;
 	proto_comm_t proto_comm;
 } info_local_t;
 
@@ -144,6 +145,7 @@ static int32_t sf_plugin_init_local(module_info_t *this, uint32_t thread_id)
     module_priv_rep_set(this, thread_id, (void *)info);
 
     gp = this->pub_rep;
+    info->pconf = gp->pconf;
     module_list_init_local(gp->plugin, thread_id);
     return 0;
 }
@@ -212,14 +214,12 @@ static void *sf_plugin_result_get(module_info_t *this)
 static int32_t sf_plugin_fini_local(module_info_t *this, uint32_t thread_id)
 {
     uint32_t i;
-    info_global_t *gp;
     info_local_t *info;
     sf_proto_conf_t *pconf;
 
-    gp = (info_global_t *)this->pub_rep;
     info = (info_local_t *)module_priv_rep_get(this, thread_id);
-
-    pconf = gp->pconf;
+    /*fini_local发生在fini_global之前，因此不能再使用global的变量*/
+    pconf = info->pconf;
 
     for (i=0; i<pconf->total_engine_num; i++) {
 		longmask_destroy(info->proto_comm.match_mask[i]);
