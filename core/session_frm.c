@@ -398,9 +398,8 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	__update_session_count(session, packet);
     session->packet = packet;
-    session->flag |= SESSION_DIRTY;
     if (session->app_type != INVALID_PROTO_ID) {
-        if (1/*packet->flag & PKT_DONT_FREE*/) {
+        if (packet->flag & PKT_DONT_FREE) {
             /*这种情况的检查主要是由于前一个数据包已经查出协议特征，而当前的数据包到达这个地方的时候，
              * 有可能会话中还有未被处理的数据包，因此不能简单返回，还要检查一下*/
             session_return_handle(lp, packet, session);
@@ -408,6 +407,8 @@ static int32_t session_frm_process(module_info_t *this, void *data)
             packet->pktag = next_stage_tag;
         }
     } else {
+        /*注意dirty位加的位置*/
+        session->flag |= SESSION_DIRTY;
 	    packet->pktag = sf_plugin_tag;
     }
 	hash_table_unlock(hd, hash, 0);

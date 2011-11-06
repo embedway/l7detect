@@ -9,7 +9,7 @@
 #include "process.h"
 #include "parser.h"
 
-#define MAX_PACKET_HANDLE 200
+#define MAX_PACKET_HANDLE 2000
 
 tag_hd_t *pktag_hd_p;
 static zone_t *packet_zone;
