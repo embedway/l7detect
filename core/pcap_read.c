@@ -10,7 +10,6 @@
 #include "log.h"
 #include "process.h"
 
-
 typedef struct pcap_stats {
 	uint64_t good_pkts;
 	uint64_t bad_pkts;

@@ -55,8 +55,8 @@ void process_loop(module_hd_t *module_head)
                 packet = (void *)zone_alloc(packet_zone, 0);
             } while(packet == NULL);
             tag_id = recv->ops->process(recv, packet);
-            assert(packet->data);
             if (tag_id > 0) {
+                assert(packet->data);
                 status = threadpool_add_task(tp, worker_thread_process, packet, 0);
                 if (status != 0) {
                     log_error(syslog_p, "Threadpool add task, status %d\n", status);

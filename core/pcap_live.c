@@ -22,17 +22,14 @@ typedef struct pcap_live_stats {
 } pcap_live_stats_t;
 
 typedef struct info_global {
- 	packet_t *packet;
-	zone_t *zone;
-	pcap_live_stats_t stats;
+    packet_t *packet;
     pcap_t *pcap;
+	pcap_live_stats_t stats;
 } info_global_t;
 
 /*这个模块是单线程的，因此和local相关的都不需要处理*/
 static int32_t pcap_live_init_global(module_info_t *this);
 static int32_t pcap_live_process(module_info_t *this, void *data);
-static void* pcap_live_result_get(module_info_t *this);
-static void pcap_live_result_free(module_info_t *this);
 static int32_t pcap_live_fini_global(module_info_t *this);
 static int16_t tag_decap;
 
@@ -41,8 +38,8 @@ module_ops_t pcap_live_ops = {
     .init_local = NULL,
 	.start = NULL,
 	.process = pcap_live_process,
-	.result_get = pcap_live_result_get,
-	.result_free = pcap_live_result_free,
+	.result_get = NULL,
+	.result_free = NULL,
 	.fini_global = pcap_live_fini_global,
 	.fini_local = NULL,
 };
@@ -59,9 +56,6 @@ static int32_t pcap_live_init_global(module_info_t *this)
 
 	p->pcap = pcap_open_live(g_conf.u.device, MAX_PACKET_LEN, 1, CAP_LIVE_TIMEOUT, ebuf);
 	assert(p->pcap);
-
-	p->zone = zone_init("pcap_live", sizeof(packet_t) + MAX_PACKET_LEN, MAX_PACKET_HANDLE);
-	assert(p->zone);
 
 	tag_decap = tag_id_get_from_name(pktag_hd_p, "decap");
 
@@ -83,17 +77,8 @@ pcap_live_cb(u_char *user, const struct pcap_pkthdr *hdr,
     info_global_t *p = (info_global_t *)user;
     packet_t *packet;
 
-  	assert(!p->packet);
-
-	packet = zone_alloc(p->zone, 0);
-	if (packet == NULL) {
-		p->stats.drop_pkts++;
-		log_error(syslog_p, "no space error!\n");
-		return;
-	}
-
-	p->packet = packet;
-
+  	assert(p->packet);
+    packet = p->packet;
 	__packet_init(packet);
 	packet->len = hdr->caplen;
 	if (packet->len >= MAX_PACKET_LEN) {
@@ -113,34 +98,13 @@ static int32_t pcap_live_process(module_info_t *this, void *data)
     int inpkts;
 
 	p = (info_global_t *)this->pub_rep;
+    p->packet = data;
     inpkts = pcap_dispatch(p->pcap, 1, pcap_live_cb, (u_char *)p);
     if (inpkts > 0) {
         return tag_decap;
     } else {
         return 0;
     }
-}
-
-static void* pcap_live_result_get(module_info_t *this)
-{
-	info_global_t *p;
-
-    p = (info_global_t *)this->pub_rep;
-	if (p != NULL) {
-		return p->packet;
-	}
-	return NULL;
-}
-
-static void pcap_live_result_free(module_info_t *this)
-{
-	if (this->pub_rep != NULL) {
-		info_global_t *p = this->pub_rep;
-		if (p->packet) {
-			zone_free(p->zone, p->packet);
-			p->packet = NULL;
-		}
-	}
 }
 
 static int32_t pcap_live_fini_global(module_info_t *this)
@@ -153,10 +117,6 @@ static int32_t pcap_live_fini_global(module_info_t *this)
 	log_notice(syslog_p, "    Drop packets    :%d\n", p->stats.drop_pkts);
 	log_notice(syslog_p, "    Oversize packets:%d\n", p->stats.drop_pkts);
 
-	if (p->zone) {
-		zone_fini(p->zone);
-		p->zone = NULL;
-	}
 	pcap_close(p->pcap);
 	p->pcap = NULL;
 	p->packet = NULL;
