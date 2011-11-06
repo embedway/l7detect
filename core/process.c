@@ -17,6 +17,7 @@ extern module_hd_t *module_hd_p;
 void worker_thread_process(void *data)
 {
     packet_t *packet;
+    packet_t *next;
     assert(data);
 
     packet = (packet_t *)data;
@@ -27,7 +28,11 @@ void worker_thread_process(void *data)
        threadpool_add_task(tp, worker_thread_process, packet, 0);
     } else if (packet->flag & PKT_DONT_FREE) {
     } else {
-        zone_free(packet_zone, packet);
+        do {
+            next = packet->next_packet;
+            zone_free(packet_zone, packet);
+            packet = next;
+        } while (packet != NULL);
     }
 }
 

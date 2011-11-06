@@ -118,10 +118,10 @@ LDLUA_METHOD session_loadnum(lua_State* L)
             lua_pushinteger(L, *n);
 			return 1;
 		} else {
-			luaL_error(L,"session data not buffered\n");
+			luaL_error(L,"session data not buffered");
 		}
 	} else {
-		luaL_error(L,"session not found\n");
+		luaL_error(L,"node not found");
 	}
 	return 0;
 }

@@ -86,10 +86,11 @@ static tag_hd_t* __tag_init()
 	tag_register(tag_hd, "l2tp");
 	tag_register(tag_hd, "ipv4_frag");
 	tag_register(tag_hd, "ipv6_frag");
-	tag_register(tag_hd, "tcp");
-	tag_register(tag_hd, "udp");
+	tag_register(tag_hd, "tcp"); /*8*/
+	tag_register(tag_hd, "udp"); /*9*/
 	tag_register(tag_hd, "sf_plugin");
-	tag_register(tag_hd, "parsed");
+	tag_register(tag_hd, "parsed");/*11*/
+	tag_register(tag_hd, "session_buf");/*12*/
 	assert(tag_hd);
 	return tag_hd;
 }
@@ -126,6 +127,7 @@ static module_hd_t* __module_init()
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "tcp");
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "udp");
+    module_tag_bind(module_hd_p, pktag_hd_p, "session", "session_buf");
 	module_tag_bind(module_hd_p, pktag_hd_p, "session", "parsed");
 
 	module_tag_bind(module_hd_p, pktag_hd_p, "sf_plugin", "sf_plugin");

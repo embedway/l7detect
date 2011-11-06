@@ -34,6 +34,7 @@ static int session_frm_fini_local(module_info_t *this, uint32_t thread_id);
 
 static uint16_t sf_plugin_tag;
 static uint16_t parsed_tag;
+static uint16_t session_buf_tag;
 static uint16_t next_stage_tag; /*未来扩展使用*/
 
 module_ops_t session_frm_ops = {
@@ -69,6 +70,7 @@ typedef struct session_index {
 typedef struct session_item {
 	session_index_t index;
 	flow_item_t flow[2];		/**< [0]为上行流，[1]为下行流 */
+    packet_t *packet;           /**< 包缓存，用来处理dirty的情况*/
 #define FLOW_UP_STREAM_INDEX 0
 #define FLOW_DN_STREAM_INDEX 1
 	uint16_t dir:2;
@@ -175,10 +177,32 @@ static inline void __init_session(session_item_t *session, session_index_t *inde
 	LIST_HEAD_INIT(&session->protobuf_head);
 }
 
-static inline uint32_t __post_parsed(hash_table_hd_t *hd, packet_t* packet, session_item_t* session,
-							  proto_comm_t *comm, uint32_t final_state)
+static inline void session_return_handle(info_local_t *this, packet_t *packet, session_item_t *session)
 {
-	hash_table_lock(hd, session->index.hash, 0);
+    /*处理会话中尚未被处理的其他数据包*/
+    void *next_packet = NULL;
+
+    next_packet = packet->next_packet;
+    if (next_packet != NULL) {
+        this->packet = next_packet;
+        this->packet->pktag = session_buf_tag;
+    } else {
+        session->flag &= ~SESSION_DIRTY;
+	    packet->pktag = next_stage_tag;
+        session->packet = NULL;
+    }
+}
+
+static inline uint32_t __post_parsed(info_local_t *this, hash_table_hd_t *hd,
+                                     proto_comm_t *comm,  uint32_t final_state)
+{
+    packet_t *packet;
+    session_item_t* session;
+
+    session = this->session;
+    packet = this->packet;
+
+    hash_table_lock(hd, session->index.hash, 0);
 	if (comm->state == final_state) {
 		session->app_type = packet->app_type;
 		/*do some clean things*/
@@ -188,9 +212,8 @@ static inline uint32_t __post_parsed(hash_table_hd_t *hd, packet_t* packet, sess
 		session->app_state = comm->state;
 		/*mask在sf_plugin模块中已经被修改*/
 	}
-    session->flag &= ~SESSION_DIRTY;
+    session_return_handle(this, packet, session);
     hash_table_unlock(hd, session->index.hash, 0);
-	packet->pktag = next_stage_tag;
 	return packet->pktag;
 }
 
@@ -252,7 +275,7 @@ static int32_t session_frm_init_global(module_info_t *this)
 
     sf_plugin_tag = tag_id_get_from_name(pktag_hd_p, "sf_plugin");
 	parsed_tag = tag_id_get_from_name(pktag_hd_p, "parsed");
-
+    session_buf_tag = tag_id_get_from_name(pktag_hd_p, "session_buf");
     return 0;
 }
 
@@ -292,7 +315,6 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	if ((lp->packet != NULL) && lp->packet != data) {
 		comm = (proto_comm_t *)data;
-
 		packet = comm->packet;
 		assert(packet == lp->packet);
 	} else {
@@ -303,7 +325,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 
 	if (packet->pktag == parsed_tag) {
 		assert(comm);
-		return __post_parsed(hd, packet, session, comm, gp->sf_conf->final_state);
+		return __post_parsed(lp, hd, comm, gp->sf_conf->final_state);
 	}
 
 	if (!(packet->prot_types[packet->prot_depth-2] == DPI_PROT_IPV4)) {
@@ -352,9 +374,18 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 			log_error(syslog_p, "new session insert error, status=%d\n", status);
 			goto failed;
 		}
-	} else if (session->flag & SESSION_DIRTY) {
-        /*当前会话正在处理，立即返回到队列中，等待下次处理*/
-       /*还没有实现，有待改进*/
+	} else if ((session->flag & SESSION_DIRTY) && (packet->top_packet == NULL)) {
+        /*当前会话正在处理，把包存起来，等待下次处理*/
+        packet_t *p = (packet_t *)session->packet;
+        assert(p);
+        while (p->next_packet != NULL) {
+            p = p->next_packet;
+        }
+        p->next_packet = packet;
+        packet->top_packet = session->packet;
+        packet->flag |= PKT_DONT_FREE;
+        hash_table_unlock(hd, hash, 0);
+        return 0;
     }
 	lp->session = session;
 
@@ -366,15 +397,21 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	}
 
 	__update_session_count(session, packet);
+    session->packet = packet;
     session->flag |= SESSION_DIRTY;
+    if (session->app_type != INVALID_PROTO_ID) {
+        if (1/*packet->flag & PKT_DONT_FREE*/) {
+            /*这种情况的检查主要是由于前一个数据包已经查出协议特征，而当前的数据包到达这个地方的时候，
+             * 有可能会话中还有未被处理的数据包，因此不能简单返回，还要检查一下*/
+            session_return_handle(lp, packet, session);
+        } else {
+            packet->pktag = next_stage_tag;
+        }
+    } else {
+	    packet->pktag = sf_plugin_tag;
+    }
 	hash_table_unlock(hd, hash, 0);
-	if ((session->app_type != INVALID_PROTO_ID)) {
-		/*app length is 0*/
-		return next_stage_tag;
-	} else {
-		packet->pktag = sf_plugin_tag;
-		return packet->pktag;
-	}
+	return packet->pktag;
 failed:
 	INC_CNT(stats->session_failed);
 	hash_table_unlock(hd, hash, 0);
@@ -388,13 +425,16 @@ static void* session_frm_result_get(module_info_t *this)
     info = (info_local_t *)module_priv_rep_get(this, sys_thread_id_get());
     assert(info);
 
-    info->proto_buf.packet = info->packet;
-	assert(info->session);
-	info->proto_buf.state = info->session->app_state;
-    /*FIXME:将流表中的协议特征缓存给下一个引擎处理，这样会导致临界区过大，需要调整*/
-	info->proto_buf.protobuf_head = &info->session->protobuf_head;
-
-	return &info->proto_buf;
+    if (info->packet->pktag == session_buf_tag) {
+        return info->packet;
+    } else {
+        info->proto_buf.packet = info->packet;
+	    assert(info->session);
+	    info->proto_buf.state = info->session->app_state;
+	    info->proto_buf.protobuf_head = &info->session->protobuf_head;
+	    return &info->proto_buf;
+    }
+    return NULL;
 }
 
 static void session_frm_result_free(module_info_t *this)

@@ -188,7 +188,7 @@ int32_t module_list_process(module_hd_t *head_p, tag_hd_t *tag_p, int32_t init_t
 
 	for (i=1; i<= head_p->module_valid; i++) {
 		if (module_hit_mask & (1<<i)) {
-			if (modules[i].ops->result_free) {
+			if (modules[i].ops != NULL && modules[i].ops->result_free) {
 				modules[i].ops->result_free(&modules[i]);
 			}
 		}
