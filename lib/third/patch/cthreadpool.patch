@@ -1,6 +1,6 @@
 diff -crN cthreadpool/Makefile cthreadpool.new/Makefile
 *** cthreadpool/Makefile	1970-01-01 08:00:00.000000000 +0800
---- cthreadpool.new/Makefile	2011-10-19 10:45:12.011502430 +0800
+--- cthreadpool.new/Makefile	2011-11-07 05:50:16.000000000 +0800
 ***************
 *** 0 ****
 --- 1,20 ----
@@ -24,3 +24,95 @@ diff -crN cthreadpool/Makefile cthreadpool.new/Makefile
 + 
 + clean:
 + 		rm -f $(OBJS) *~ *.d $(TARGET)
+diff -crN cthreadpool/threadpool.c cthreadpool.new/threadpool.c
+*** cthreadpool/threadpool.c	2010-12-24 17:04:24.000000000 +0800
+--- cthreadpool.new/threadpool.c	2011-11-07 05:49:27.000000000 +0800
+***************
+*** 8,13 ****
+--- 8,14 ----
+  #include "threadpool.h"
+  
+  #include <stdlib.h>
++ #include <assert.h>
+  #include <pthread.h>
+  #include <stdio.h>
+  
+***************
+*** 45,50 ****
+--- 46,52 ----
+  
+  	struct threadpool_task tasks[THREAD_POOL_QUEUE_SIZE];
+  
++     uint32_t (*init_local)();
+  	pthread_t *thr_arr;
+  
+  	unsigned short num_of_threads;
+***************
+*** 243,248 ****
+--- 245,253 ----
+  	struct threadpool *pool = (struct threadpool*)data;
+  	struct threadpool_task *task;
+  
++     if (pool->init_local) {
++         assert(pool->init_local() == 0);
++     }
+  	while (1) {
+  		task = threadpool_task_get_task(pool);
+  		if (task == NULL) {
+***************
+*** 356,362 ****
+  	return NULL;
+  }
+  
+! struct threadpool* threadpool_init(int num_of_threads)
+  {
+  	struct threadpool *pool;
+  	int i;
+--- 361,367 ----
+  	return NULL;
+  }
+  
+! struct threadpool* threadpool_init(int num_of_threads, uint32_t (*init_local)())
+  {
+  	struct threadpool *pool;
+  	int i;
+***************
+*** 413,418 ****
+--- 418,424 ----
+  		return NULL;
+  	}
+  
++     pool->init_local = init_local;
+  	/* Start the worker threads. */
+  	for (pool->num_of_threads = 0; pool->num_of_threads < num_of_threads; (pool->num_of_threads)++) {
+  		if (pthread_create(&(pool->thr_arr[pool->num_of_threads]),NULL,worker_thr_routine,pool)) {
+diff -crN cthreadpool/threadpool.h cthreadpool.new/threadpool.h
+*** cthreadpool/threadpool.h	2010-12-24 17:04:20.000000000 +0800
+--- cthreadpool.new/threadpool.h	2011-11-07 05:49:27.000000000 +0800
+***************
+*** 7,12 ****
+--- 7,13 ----
+  
+  #ifndef THREADPOOL_H_
+  #define THREADPOOL_H_
++ #include "stdint.h"
+  
+  struct threadpool;
+  
+***************
+*** 17,23 ****
+   * @param num_of_threads The number of worker thread used in this pool.
+   * @return On success returns a newly allocated thread pool, on failure NULL is returned.
+   */
+! struct threadpool* threadpool_init(int num_of_threads);
+  
+  /**
+   * This function adds a routine to be exexuted by the threadpool at some future time.
+--- 18,24 ----
+   * @param num_of_threads The number of worker thread used in this pool.
+   * @return On success returns a newly allocated thread pool, on failure NULL is returned.
+   */
+! struct threadpool* threadpool_init(int num_of_threads, uint32_t (*init_local)());
+  
+  /**
+   * This function adds a routine to be exexuted by the threadpool at some future time.
