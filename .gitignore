@@ -20,3 +20,4 @@ cscope.*
 test/*.pcap
 tags
 include/threadpool.h
+include/libevent

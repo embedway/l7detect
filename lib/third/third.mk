@@ -26,6 +26,7 @@ $(LIBEVENT):$(LIBEVENT_DIR)
 	cd $(LIBEVENT_DIR);./configure $(LIBEVENT_CFLAGS) 	 \
        --prefix=$(LIBEVENT_DIR)/install-dir; 			\
 	make;make install;cp $(LIBEVENT_DIR)/install-dir/lib/libevent.a $@
+	ln -fs $(LIBEVENT_DIR)/install-dir/include $(TOP)/include/libevent
 
 $(LIBEVENT_DIR):
 	mkdir -p $(THIRD_BUILD_DIR)
