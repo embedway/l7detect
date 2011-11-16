@@ -19,7 +19,7 @@ API_OBJS += $(OBJ_DIR)/lua_ci.o
 
 OBJS_$(d)  :=  $(API_OBJS)
 
-API_CFLAGS_LOCAL := -I$(d) -I$(TOP)/api -I$(TOP)/sys -I$(TOP)/test
+API_CFLAGS_LOCAL := -I$(d) -I$(LIBEVENT_DIR)/install-dir/include -I$(TOP)/api -I$(TOP)/sys -I$(TOP)/test
 
 $(OBJS_$(d)):  CFLAGS_LOCAL := $(API_CFLAGS_LOCAL)
 

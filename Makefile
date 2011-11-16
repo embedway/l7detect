@@ -9,6 +9,8 @@ all: all_targets
 include $(TOP)/build/extra.mk
 
 #  include relevant component Makefile fragments
+dir:=$(TOP)/lib
+include $(dir)/lib.mk
 
 dir:=$(TOP)/cli
 include $(dir)/cli.mk
@@ -18,9 +20,6 @@ include $(dir)/core.mk
 
 dir:=$(TOP)/test
 include $(dir)/test.mk
-
-dir:=$(TOP)/lib
-include $(dir)/lib.mk
 
 dir:=$(TOP)/sys
 include $(dir)/sys.mk
@@ -39,7 +38,7 @@ CFLAGS_LOCAL = -g -O2 -W -Wall -Wno-unused-parameter
 CFLAGS_LOCAL += $($(TARGET)-FLAGS)
 
 CFLAGS_GLOBAL += -I$(TOP)/include -I$(LIBLUA_DIR)/include
-LDFLAGS_GLOBAL += -lpthread -lpcap -ldl -lm -L$(LIBLUA_DIR)/lib -llua -L$(CTHREADPOOL_DIR) -lcthreadpool
+LDFLAGS_GLOBAL += -lpthread -lpcap -ldl -lm -lrt $(LIBEVENT) -L$(LIBLUA_DIR)/lib -llua -L$(CTHREADPOOL_DIR) -lcthreadpool
 include $(TOP)/build/application.mk
 
 CLEAN_LIST += $(OBJS)

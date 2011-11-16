@@ -6,9 +6,10 @@
 #include <dlfcn.h>
 #include "plugin.h"
 #include <arpa/inet.h>
- #include <sys/types.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
+#include "event.h"
 #endif
 
 #include "common.h"
@@ -81,8 +82,8 @@ typedef struct session_item {
 	uint16_t flag:14;
 	uint16_t stage;
 	uint64_t id;
-	uint64_t start_time;
-	uint64_t last_time;
+	sys_time_t start_time;
+	sys_time_t last_time;
 	uint32_t app_type;			/**<  协议小类*/
 	uint32_t app_state;         /**< 协议识别状态*/
 	list_head_t protobuf_head;
@@ -95,6 +96,13 @@ typedef struct info_global {
 	sf_proto_conf_t *sf_conf;
 	hash_table_hd_t *session_table;
 	log_t *log_c;
+    struct {
+        pthread_t tid;
+        struct event_base *base;
+        struct event ev;
+        struct timeval tv;
+        uint32_t bucket;
+    } timer;
 	hash_func hash_cb;
 } info_global_t;
 
@@ -111,6 +119,10 @@ typedef struct hash_map {
 	hash_func hash_cb;
 } hash_map_t;
 
+static void __print_item(info_global_t *info, session_item_t *item);
+static int32_t __free_item(hash_table_hd_t *session_table, uint32_t hash,
+                                session_item_t *item);
+
 static uint32_t hash_xor(session_index_t *index)
 {
 	return index->ip[0] ^ index->ip[1] ^ index->port[0] ^ index->port[1];
@@ -126,16 +138,72 @@ static uint32_t hash_sum(session_index_t *index)
 	return (index->ip[0] + index->ip[1]) + (index->port[0] + index->port[1]);
 }
 
+static void __flow_timer_process(evutil_socket_t fd, short which, void *arg)
+{
+    info_global_t *info;
+    hash_table_hd_t *hd;
+    session_item_t *item;
+    session_conf_t *conf;
+    struct timeval current;
+    int32_t status;
+
+    info = (info_global_t *)arg;
+    hd = info->session_table;
+    conf = info->conf;
+    sys_get_time(&current);
+
+    hash_table_one_bucket_for_each(hd, info->timer.bucket, item) {
+        if (sys_time_diff(item->last_time, current) >= conf->session_expire_time) {
+            __print_item(info, item);
+            log_info(syslog_p, "timer item %p, last_sec=%d, current=%d\n", item, item->last_time.tv_sec, current.tv_sec);
+            if ((status = __free_item(hd, info->timer.bucket, item)) != 0) {
+                log_error(syslog_p, "free item error, status %d\n", status);
+            }
+        }
+
+    }
+    info->timer.bucket++;
+    if (info->timer.bucket >= hd->bucket_num) {
+        info->timer.bucket = 0;
+    }
+
+    int rv = evtimer_add(&info->timer.ev, &info->timer.tv);
+    if (rv != 0) {
+        log_error(syslog_p, "evtimer add error!\n");
+    }
+}
+
+static void *__event_thread_cb(void *arg)
+{
+    info_global_t *info;
+    int rv;
+
+    info = (info_global_t *)arg;
+
+    info->timer.base = event_base_new();
+    assert(info->timer.base);
+
+    rv = evtimer_assign(&info->timer.ev, info->timer.base, __flow_timer_process, info);
+    assert(rv == 0);
+
+    rv = evtimer_add(&info->timer.ev, &info->timer.tv);
+    assert(rv == 0);
+    event_base_loop(info->timer.base, 0);
+    return NULL;
+}
+
 void __update_session_count(session_item_t *session, packet_t *packet)
 {
 	uint32_t dir =  packet->dir & PKT_DIR_MASK;
-	if (dir == PKT_DIR_UPSTREAM) {
+
+    if (dir == PKT_DIR_UPSTREAM) {
 		session->flow[FLOW_UP_STREAM_INDEX].pkts++;
 		session->flow[FLOW_UP_STREAM_INDEX].bytes += packet->len;
 	} else if (dir == PKT_DIR_DNSTREAM) {
 		session->flow[FLOW_DN_STREAM_INDEX].pkts++;
 		session->flow[FLOW_DN_STREAM_INDEX].bytes += packet->len;
 	}
+    sys_get_time(&session->last_time);
 }
 
 static inline int32_t __is_interal_ip(uint32_t ip)
@@ -174,10 +242,55 @@ static inline void __init_session(session_item_t *session, session_index_t *inde
 	memcpy(&session->index, index, sizeof(session_index_t));
 	session->dir = __session_index_dir(index);
 	session->app_type = INVALID_PROTO_ID;
+    sys_get_time(&session->start_time);
 	LIST_HEAD_INIT(&session->protobuf_head);
 }
 
-static inline void session_return_handle(info_local_t *this, packet_t *packet, session_item_t *session)
+static char *__get_ip_protocol_name(uint16_t protocol)
+{
+	switch(protocol) {
+	case 1:
+		return "icmp";
+	case 6:
+		return "tcp";
+	case 17:
+		return "udp";
+	default:
+		return "error";
+		break;
+	}
+	return "error";
+}
+
+static void __print_item(info_global_t *info, session_item_t *item)
+{
+    uint32_t ip0_int, ip1_int;
+	uint16_t port0, port1;
+	char ip0[20], ip1[20];
+
+    ip0_int = htonl(item->index.ip[0]);
+	ip1_int = htonl(item->index.ip[1]);
+	port0 = item->index.port[0];
+	port1 = item->index.port[1];
+	if (item->dir == SESSION_INDEX_DNSTREAM) {
+	/*如果索引是下行的，交换一下ip和端口来展示*/
+		swap(ip0_int, ip1_int);
+		swap(port0, port1);
+	}
+	/*源ip，源端口，目的ip, 目的端口，协议类型，上行包数，下行包数，上行字节数，下行字节数*/
+	log_print(info->log_c, "%s,%d,%s,%d,%s,%d,%d,%d,%d,%s\n",
+			   inet_ntop(AF_INET, &ip0_int, ip0, sizeof(ip0)),
+			   port0,
+			   inet_ntop(AF_INET, &ip1_int, ip1, sizeof(ip1)),
+			   port1,
+			   __get_ip_protocol_name(item->index.protocol),
+			  item->flow[0].pkts, item->flow[1].pkts,
+			  item->flow[0].bytes, item->flow[1].bytes,
+			  (item->app_type != INVALID_PROTO_ID) ?
+			  info->sf_conf->protos[item->app_type].name:"Unknown");
+}
+
+static inline void __session_return_handle(info_local_t *this, packet_t *packet, session_item_t *session)
 {
     /*处理会话中尚未被处理的其他数据包*/
     void *next_packet = NULL;
@@ -210,15 +323,15 @@ static inline uint32_t __post_parsed(info_local_t *this, hash_table_hd_t *hd,
 	} else if (comm->state != session->app_state) {
 		/*save status*/
 		session->app_state = comm->state;
-		/*mask在sf_plugin模块中已经被修改*/
+        /*mask在sf_plugin模块中已经被修改*/
 	}
-    session_return_handle(this, packet, session);
+    __session_return_handle(this, packet, session);
     hash_table_unlock(hd, session->index.hash, 0);
 	return packet->pktag;
 }
 
 
-static int32_t session_compare(void *this, void *user_data, void *item)
+static int32_t __session_compare(void *this, void *user_data, void *item)
 {
 	session_item_t *table_item = (session_item_t *)item;
 
@@ -230,13 +343,78 @@ static int32_t session_compare(void *this, void *user_data, void *item)
 	return 1;
 }
 
+static void __session_item_show(info_global_t *info, session_frm_stats_t *stats)
+{
+	hash_table_hd_t *session_table = info->session_table;
+	uint32_t i;
+	uint32_t bucket, max_bucket = 0;
+
+	log_notice(syslog_p, "\n-----------------sessioninfo---------------\n");
+    log_notice(syslog_p, "unknown_pkts=%llu\n", stats->unknown_pkts);
+    log_notice(syslog_p, "unknown_dir=%llu\n", stats->unknown_dir);
+    log_notice(syslog_p, "session_count=%llu\n", stats->session_count);
+	log_notice(syslog_p, "session_failed=%llu\n", stats->session_failed);
+
+
+	for (i=0; i<session_table->bucket_num; i++) {
+		session_item_t *item = NULL;
+		bucket = 0;
+		hash_table_lock(session_table, i, 0);
+		hash_table_one_bucket_for_each(session_table, i, item) {
+            __print_item(info, item);
+			bucket++;
+        }
+		hash_table_unlock(session_table, i, 0);
+		if (bucket > max_bucket) {
+			max_bucket = bucket;
+		}
+	}
+	log_notice(syslog_p, "max_bucket=%d\n", max_bucket);
+}
+
+static int32_t __free_item(hash_table_hd_t *session_table, uint32_t hash,
+                                session_item_t *item)
+{
+    int32_t status;
+
+    status = hash_table_remove(session_table, hash, item);
+	if (status != 0) {
+        return status;
+	}
+	protobuf_destroy(&item->protobuf_head);
+	free(item);
+    return 0;
+}
+
+static void __session_table_clear(hash_table_hd_t *session_table)
+{
+	uint32_t i;
+	int32_t status;
+
+	for (i=0; i<session_table->bucket_num; i++) {
+		session_item_t *item = NULL;
+		hash_table_lock(session_table, i, 0);
+		hash_table_one_bucket_for_each(session_table, i, item) {
+			if (item) {
+                if ((status = __free_item(session_table, i, item)) != 0) {
+		            log_error(syslog_p, "remove item error, status %d\n", status);
+                }
+            }
+		}
+		hash_table_unlock(session_table, i, 0);
+	}
+}
+
+
 static int32_t session_frm_init_global(module_info_t *this)
 {
     info_global_t *info;
-	session_conf_t *conf;
+    session_conf_t *conf;
 	sf_proto_conf_t *sf_conf;
     hash_table_hd_t *session_table;
 	uint32_t i;
+    int rv;
+
 	hash_map_t hash_map[] = {
 		{"hash_xor", hash_xor},
 		{"hash_xor_sum", hash_xor_sum},
@@ -263,13 +441,21 @@ static int32_t session_frm_init_global(module_info_t *this)
 	info->log_c = log_init(conf->session_logname, DEBUG);
 	assert(info->log_c);
 
+	log_print(info->log_c, "源IP, 源端口, 目的IP, 目的端口, 协议类型, 上行包数, 下行包数, 上行字节数, 下行字节数, 协议类型\n");
 	for(i=0; i<sizeof(hash_map)/sizeof(hash_map[0]); i++) {
 		if (strcmp(hash_map[i].name, conf->hash_name) == 0) {
 			info->hash_cb = hash_map[i].hash_cb;
 			break;
 		}
 	}
+
 	assert(info->hash_cb);
+
+    info->timer.tv.tv_sec = 0;
+    info->timer.tv.tv_usec = 100;
+
+    rv = pthread_create(&info->timer.tid, NULL, __event_thread_cb, info);
+    assert(rv == 0);
 
     this->pub_rep = info;
 
@@ -356,7 +542,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
 	buf->hash = hash;
 
 	hash_table_lock(hd, hash, 0);
-	session = hash_table_search(hd, hash, NULL, session_compare, buf, NULL);
+	session = hash_table_search(hd, hash, NULL, __session_compare, buf, NULL);
 
 	if (session == NULL) {
 		/*新建流*/
@@ -402,7 +588,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
         if (packet->flag & PKT_DONT_FREE) {
             /*这种情况的检查主要是由于前一个数据包已经查出协议特征，而当前的数据包到达这个地方的时候，
              * 有可能会话中还有未被处理的数据包，因此不能简单返回，还要检查一下*/
-            session_return_handle(lp, packet, session);
+            __session_return_handle(lp, packet, session);
         } else {
             packet->pktag = next_stage_tag;
         }
@@ -450,98 +636,6 @@ static void session_frm_result_free(module_info_t *this)
 }
 
 
-static char *__get_ip_protocol_name(uint16_t protocol)
-{
-	switch(protocol) {
-	case 1:
-		return "icmp";
-	case 6:
-		return "tcp";
-	case 17:
-		return "udp";
-	default:
-		return "error";
-		break;
-	}
-	return "error";
-}
-
-static void session_item_show(info_global_t *info, session_frm_stats_t *stats)
-{
-	hash_table_hd_t *session_table = info->session_table;
-	uint32_t i;
-	char ip0[20], ip1[20];
-	uint32_t ip0_int, ip1_int;
-	uint16_t port0, port1;
-	uint32_t bucket, max_bucket = 0;
-	sf_proto_conf_t *sf_conf = info->sf_conf;
-
-	log_notice(syslog_p, "\n-----------------sessioninfo---------------\n");
-    log_notice(syslog_p, "unknown_pkts=%llu\n", stats->unknown_pkts);
-    log_notice(syslog_p, "unknown_dir=%llu\n", stats->unknown_dir);
-    log_notice(syslog_p, "session_count=%llu\n", stats->session_count);
-	log_notice(syslog_p, "session_failed=%llu\n", stats->session_failed);
-
-	log_print(info->log_c, "源IP, 源端口, 目的IP, 目的端口, 协议类型, 上行包数, 下行包数, 上行字节数, 下行字节数, 协议类型\n");
-
-	for (i=0; i<session_table->bucket_num; i++) {
-		session_item_t *item = NULL;
-		bucket = 0;
-		hash_table_lock(session_table, i, 0);
-		hash_table_one_bucket_for_each(session_table, i, item) {
-			ip0_int = htonl(item->index.ip[0]);
-			ip1_int = htonl(item->index.ip[1]);
-			port0 = item->index.port[0];
-			port1 = item->index.port[1];
-			bucket++;
-
-			if (item->dir == SESSION_INDEX_DNSTREAM) {
-				/*如果索引是下行的，交换一下ip和端口来展示*/
-				swap(ip0_int, ip1_int);
-				swap(port0, port1);
-			}
-			/*源ip，源端口，目的ip, 目的端口，协议类型，上行包数，下行包数，上行字节数，下行字节数*/
-			log_print(info->log_c, "%s,%d,%s,%d,%s,%d,%d,%d,%d,%s\n",
-					   inet_ntop(AF_INET, &ip0_int, ip0, sizeof(ip0)),
-					   port0,
-					   inet_ntop(AF_INET, &ip1_int, ip1, sizeof(ip1)),
-					   port1,
-					   __get_ip_protocol_name(item->index.protocol),
-					  item->flow[0].pkts, item->flow[1].pkts,
-					  item->flow[0].bytes, item->flow[1].bytes,
-					  (item->app_type != INVALID_PROTO_ID) ?
-					  sf_conf->protos[item->app_type].name:"Unknown");
-		}
-		hash_table_unlock(session_table, i, 0);
-		if (bucket > max_bucket) {
-			max_bucket = bucket;
-		}
-	}
-	log_notice(syslog_p, "max_bucket=%d\n", max_bucket);
-}
-
-static void __session_table_clear(hash_table_hd_t *session_table)
-{
-	uint32_t i;
-	int32_t status;
-
-	for (i=0; i<session_table->bucket_num; i++) {
-		session_item_t *item = NULL;
-		hash_table_lock(session_table, i, 0);
-		hash_table_one_bucket_for_each(session_table, i, item) {
-			if (item) {
-				status = hash_table_remove(session_table, i, item);
-				if (status != 0) {
-					log_error(syslog_p, "remove item error, status %d\n", status);
-				}
-				protobuf_destroy(&item->protobuf_head);
-				free(item);
-			}
-		}
-		hash_table_unlock(session_table, i, 0);
-	}
-}
-
 static int32_t session_frm_fini_local(module_info_t *this, uint32_t thread_id)
 {
     info_local_t *info = (info_local_t *)module_priv_rep_get(this, thread_id);
@@ -556,7 +650,16 @@ static int32_t session_frm_fini_global(module_info_t *this)
     info_global_t *info = (info_global_t *)this->pub_rep;
     session_frm_stats_t stats;
     uint32_t i;
+    int rv;
 
+    rv = event_base_loopbreak(info->timer.base);
+    if (rv != 0) {
+        log_error(syslog_p, "Event break error:%d\n", rv);
+    }
+    pthread_join(info->timer.tid, NULL);
+    evtimer_del(&info->timer.ev);
+
+    event_base_free(info->timer.base);
     memset(&stats, 0, sizeof(session_frm_stats_t));
     for(i=0; i<g_conf.thread_num; i++) {
         info_local_t *info = (info_local_t *)module_priv_rep_get(this, i);
@@ -566,7 +669,7 @@ static int32_t session_frm_fini_global(module_info_t *this)
         stats.session_failed += info->stats.session_failed;
     }
 
-	session_item_show(info, &stats);
+	__session_item_show(info, &stats);
 
 	if (info != NULL) {
 		if (info->log_c) {
