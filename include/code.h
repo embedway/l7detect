@@ -9,11 +9,12 @@ enum sys_code {
 	NO_SPACE_ERROR,
 	FINI_ERROR,
 	ITEM_NOT_FOUND,
-	CONFIG_ERROR, 
+    SYSCALL_ERROR,
+	CONFIG_ERROR,
 };
 
 
 enum process_code {
-	UNKNOWN_PKT = 100, 
+	UNKNOWN_PKT = 100,
 };
 #endif

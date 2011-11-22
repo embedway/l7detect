@@ -405,7 +405,6 @@ static void __session_table_clear(hash_table_hd_t *session_table)
 	}
 }
 
-
 static int32_t session_frm_init_global(module_info_t *this)
 {
     info_global_t *info;
@@ -425,7 +424,7 @@ static int32_t session_frm_init_global(module_info_t *this)
     info = zmalloc(info_global_t *, sizeof(info_global_t));
 	assert(info);
 
-	conf = (session_conf_t *)conf_module_config_search("session", NULL);
+	conf = (session_conf_t *)conf_module_config_search(SESSION_CONF_NAME, NULL);
 	assert(conf);
 
 	sf_conf = (sf_proto_conf_t *)conf_module_config_search(SF_PROTO_CONF_NAME, NULL);
