@@ -152,7 +152,13 @@ static void __flow_timer_process(evutil_socket_t fd, short which, void *arg)
     conf = info->conf;
     sys_get_time(&current);
 
+    hash_table_lock(hd, info->timer.bucket, 0);
     hash_table_one_bucket_for_each(hd, info->timer.bucket, item) {
+        if (item->flag & SESSION_DIRTY) {
+            printf("here, dirty\n");
+            continue;
+        }
+        assert(item->packet == NULL);
         if (sys_time_diff(item->last_time, current) >= conf->session_expire_time) {
             __print_item(info, item);
             log_info(syslog_p, "timer item %p, last_sec=%d, current=%d\n", item, item->last_time.tv_sec, current.tv_sec);
@@ -162,6 +168,7 @@ static void __flow_timer_process(evutil_socket_t fd, short which, void *arg)
         }
 
     }
+    hash_table_unlock(hd, info->timer.bucket, 0);
     info->timer.bucket++;
     if (info->timer.bucket >= hd->bucket_num) {
         info->timer.bucket = 0;
