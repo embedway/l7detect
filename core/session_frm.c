@@ -154,12 +154,11 @@ static void __flow_timer_process(evutil_socket_t fd, short which, void *arg)
 
     hash_table_lock(hd, info->timer.bucket, 0);
     hash_table_one_bucket_for_each(hd, info->timer.bucket, item) {
-        if (item->flag & SESSION_DIRTY) {
-            printf("here, dirty\n");
-            continue;
-        }
-        assert(item->packet == NULL);
         if (sys_time_diff(item->last_time, current) >= conf->session_expire_time) {
+            if (item->flag & SESSION_DIRTY) {
+                continue;
+            }
+            assert(item->packet == NULL);
             __print_item(info, item);
             log_info(syslog_p, "timer item %p, last_sec=%d, current=%d\n", item, item->last_time.tv_sec, current.tv_sec);
             if ((status = __free_item(hd, info->timer.bucket, item)) != 0) {
@@ -252,6 +251,11 @@ static inline void __init_session(session_item_t *session, session_index_t *inde
     sys_get_time(&session->start_time);
 	LIST_HEAD_INIT(&session->protobuf_head);
 }
+static inline void __clear_session(session_item_t *session)
+{
+    session->flag &= ~SESSION_DIRTY;
+    session->packet = NULL;
+}
 
 static char *__get_ip_protocol_name(uint16_t protocol)
 {
@@ -301,15 +305,13 @@ static inline void __session_return_handle(info_local_t *this, packet_t *packet,
 {
     /*处理会话中尚未被处理的其他数据包*/
     void *next_packet = NULL;
-
     next_packet = packet->next_packet;
     if (next_packet != NULL) {
         this->packet = next_packet;
         this->packet->pktag = session_buf_tag;
     } else {
-        session->flag &= ~SESSION_DIRTY;
-	    packet->pktag = next_stage_tag;
-        session->packet = NULL;
+        __clear_session(session);
+        packet->pktag = next_stage_tag;
     }
 }
 
@@ -596,6 +598,7 @@ static int32_t session_frm_process(module_info_t *this, void *data)
              * 有可能会话中还有未被处理的数据包，因此不能简单返回，还要检查一下*/
             __session_return_handle(lp, packet, session);
         } else {
+            __clear_session(session);
             packet->pktag = next_stage_tag;
         }
     } else {
